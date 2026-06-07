@@ -1,4 +1,8 @@
 <?php
+// Never let PHP warnings/notices print into the response body — that would
+// corrupt the JSON. Errors are still logged (see the catch in this file).
+ini_set('display_errors', '0');
+
 require __DIR__ . '/lib/response.php';
 require __DIR__ . '/lib/uuid.php';
 require __DIR__ . '/db.php';
