@@ -964,6 +964,9 @@ check('user A created a recipe', !empty($aId));
 $listA = api('GET', '/recipes');
 check('user A sees exactly 1 recipe', count($listA['json']['data'] ?? []) === 1);
 
+$ownGet = api('GET', "/recipes/$aId");
+check('user A can read own recipe by id (200)', $ownGet['status'] === 200);
+
 reset_cookies();
 $eb = 'owner_b_' . bin2hex(random_bytes(4)) . '@example.com';
 api('POST', '/auth/signup', ['email' => $eb, 'password' => 'secret123', 'display_name' => 'B']);
