@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Clock, Users, Lock, ChefHat, UserPlus } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import type { Recipe, Ingredient, Tag } from '../lib/database.types';
 import { formatTime } from '../lib/format';
 
@@ -19,38 +19,25 @@ export function PublicRecipeView({ token, onSignUp }: PublicRecipeViewProps) {
 
   useEffect(() => {
     async function load() {
-      const { data: share } = await supabase
-        .from('shared_recipes')
-        .select('recipe_id, message')
-        .eq('token', token)
-        .maybeSingle();
-
-      if (!share) {
+      try {
+        const data = await api.get<{
+          recipe: Recipe | null;
+          ingredients: Ingredient[];
+          tags: Tag[];
+          message: string;
+        }>(`/public/recipes/${token}`);
+        if (!data || !data.recipe) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+        setShareMessage(data.message || '');
+        setRecipe(data.recipe);
+        setIngredients(data.ingredients ?? []);
+        setTags(data.tags ?? []);
+      } catch {
         setNotFound(true);
-        setLoading(false);
-        return;
       }
-
-      setShareMessage(share.message || '');
-
-      const [recipeRes, ingredientsRes, tagsRes] = await Promise.all([
-        supabase.from('recipes').select('*').eq('id', share.recipe_id).maybeSingle(),
-        supabase.from('ingredients').select('*').eq('recipe_id', share.recipe_id).order('position'),
-        supabase
-          .from('recipe_tags')
-          .select('tag_id')
-          .eq('recipe_id', share.recipe_id)
-          .then(async ({ data: rtData }) => {
-            if (!rtData || rtData.length === 0) return [];
-            const tagIds = rtData.map((rt) => rt.tag_id);
-            const { data: tagData } = await supabase.from('tags').select('*').in('id', tagIds);
-            return tagData ?? [];
-          }),
-      ]);
-
-      setRecipe(recipeRes.data);
-      setIngredients(ingredientsRes.data ?? []);
-      setTags(tagsRes as Tag[]);
       setLoading(false);
     }
     load();

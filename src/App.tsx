@@ -23,13 +23,12 @@ import {
   useRecipeInstructions,
   useExtractionJobs,
   useGroceryList,
-  useSeedData,
   useRecipeCrud,
   useMealPlan,
   useCollections,
   useCollectionRecipes,
 } from './hooks/useData';
-import { supabase } from './lib/supabase';
+import { api } from './lib/api';
 import { Loader2, Menu, ChefHat } from 'lucide-react';
 
 function descendantFolderIds(
@@ -95,12 +94,11 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [ready, setReady] = useState(false);
 
-  const { seedIfEmpty } = useSeedData(userId);
   const { folders } = useFolders(userId);
   const { tags } = useTags(userId);
   const { recipes, toggleFavorite, markCooked, refetch: refetchRecipes } = useRecipes(userId);
   const { recipeTagIds, refetch: refetchTags } = useRecipeTags(userId);
-  const { jobs, refetch: refetchJobs } = useExtractionJobs(userId);
+  const { jobs } = useExtractionJobs(userId);
   const { items: groceryItems, toggleItem, addRecipeIngredients, removeItem: removeGroceryItem, clearChecked: clearCheckedGrocery, addItem: addGroceryItem } = useGroceryList(userId);
   const { plans: mealPlans, weekStart, weekEnd, addMeal, removeMeal, moveMeal, goToPrevWeek, goToNextWeek, goToThisWeek } = useMealPlan(userId);
   const { collections, createCollection, updateCollection, deleteCollection } = useCollections(userId);
@@ -111,25 +109,17 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
   const { createRecipe, updateRecipe, deleteRecipe, duplicateRecipe } = useRecipeCrud(userId);
 
   useEffect(() => {
-    seedIfEmpty().then((didSeed) => {
-      if (didSeed) {
-        refetchRecipes();
-        refetchJobs();
-      }
-      setReady(true);
-    });
-  }, [seedIfEmpty, refetchRecipes, refetchJobs]);
+    setReady(true);
+  }, []);
 
   useEffect(() => {
     if (!shareToken) return;
     (async () => {
-      const { data } = await supabase
-        .from('shared_recipes')
-        .select('recipe_id')
-        .eq('token', shareToken)
-        .maybeSingle();
-      if (data?.recipe_id) {
-        setActiveRecipeId(data.recipe_id);
+      try {
+        const data = await api.get<{ recipe_id: string }>(`/recipes/shared/${shareToken}`);
+        if (data?.recipe_id) setActiveRecipeId(data.recipe_id);
+      } catch {
+        /* token not found or not owned */
       }
       clearShareToken();
     })();
@@ -372,13 +362,13 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
               }
             }}
             onShare={async () => {
-              const { data } = await supabase
-                .from('shared_recipes')
-                .insert({ recipe_id: activeRecipe.id })
-                .select('token')
-                .single();
-              if (data?.token) {
-                return `${window.location.origin}/r/${data.token}`;
+              try {
+                const data = await api.post<{ token: string }>(`/recipes/${activeRecipe.id}/share`);
+                if (data?.token) {
+                  return `${window.location.origin}/r/${data.token}`;
+                }
+              } catch {
+                /* ignore */
               }
               return null;
             }}
@@ -412,13 +402,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
             onThisWeek={goToThisWeek}
             onGenerateGrocery={async (recipeIds) => {
               for (const rid of recipeIds) {
-                const { data: ings } = await supabase
-                  .from('ingredients')
-                  .select('*')
-                  .eq('recipe_id', rid);
-                if (ings && ings.length > 0) {
-                  await addRecipeIngredients(rid, ings);
-                }
+                await addRecipeIngredients(rid, []);
               }
             }}
             onSelectRecipe={(id) => setActiveRecipeId(id)}

@@ -10,7 +10,7 @@ import {
   Percent,
   Refrigerator,
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import type { Recipe } from '../lib/database.types';
 
 interface PantryMatchViewProps {
@@ -56,12 +56,13 @@ export function PantryMatchView({ recipes, onSelectRecipe }: PantryMatchViewProp
     const activeRecipes = recipes.filter((r) => r.status === 'active');
     const recipeIds = activeRecipes.map((r) => r.id);
 
-    const { data: allIngredients } = await supabase
-      .from('ingredients')
-      .select('recipe_id, name')
-      .in('recipe_id', recipeIds);
+    const all = await api
+      .get<{ recipe_id: string; name: string }[]>('/pantry/ingredients')
+      .catch(() => [] as { recipe_id: string; name: string }[]);
+    const recipeIdSet = new Set(recipeIds);
+    const allIngredients = all.filter((i) => recipeIdSet.has(i.recipe_id));
 
-    if (!allIngredients || allIngredients.length === 0) {
+    if (allIngredients.length === 0) {
       setResults([]);
       setLoading(false);
       return;
