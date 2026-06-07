@@ -1,0 +1,10 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /api/
+
+  # Route every /api/* request to the front controller, EXCEPT a direct
+  # request for index.php itself. Also prevents direct access to
+  # routes/*.php, lib/*.php, config.php, and schema.sql.
+  RewriteCond %{REQUEST_URI} !/api/index\.php$
+  RewriteRule ^ index.php [L]
+</IfModule>
