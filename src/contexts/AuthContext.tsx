@@ -5,12 +5,16 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { api, ApiError } from '../lib/api';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  display_name?: string;
+}
 
 interface AuthState {
-  session: Session | null;
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
   signUp: (email: string, password: string, displayName: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
@@ -20,22 +24,15 @@ interface AuthState {
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-    });
-
-    return () => subscription.unsubscribe();
+    api
+      .get<AuthUser | null>('/auth/session')
+      .then((u) => setUser(u))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
   const signUp = async (
@@ -43,27 +40,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     displayName: string
   ): Promise<string | null> => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { display_name: displayName } },
-    });
-    return error?.message ?? null;
+    try {
+      const u = await api.post<AuthUser>('/auth/signup', {
+        email,
+        password,
+        display_name: displayName,
+      });
+      setUser(u);
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Sign up failed';
+    }
   };
 
   const signIn = async (email: string, password: string): Promise<string | null> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return error?.message ?? null;
+    try {
+      const u = await api.post<AuthUser>('/auth/login', { email, password });
+      setUser(u);
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Sign in failed';
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      /* ignore */
+    }
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, signUp, signIn, signOut }}
-    >
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
