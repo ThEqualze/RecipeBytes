@@ -5,6 +5,10 @@ const SESSION_COOKIE = 'rb_session';
 
 function start_session_for(string $userId): string {
     $cfg = app_config();
+    // Opportunistic GC of expired sessions (~1% of calls; cheap on shared hosting).
+    if (random_int(1, 100) === 1) {
+        db()->exec('DELETE FROM sessions WHERE expires_at < UTC_TIMESTAMP()');
+    }
     $token = bin2hex(random_bytes(32)); // 64 hex chars
     $now = gmdate('Y-m-d H:i:s');
     $exp = gmdate('Y-m-d H:i:s', time() + (int)$cfg['session_ttl']);
