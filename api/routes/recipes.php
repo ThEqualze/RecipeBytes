@@ -14,7 +14,7 @@ $num_or_null = function ($v) {
     if (is_string($v) && trim($v) === '') return null;
     return is_numeric($v) ? $v + 0 : null;
 };
-$insert_children = function (string $recipeId, array $body) use ($num_or_null) {
+$insert_children = function (string $recipeId, array $body) use ($num_or_null, $uid) {
     $now = gmdate('Y-m-d H:i:s');
     foreach (($body['ingredients'] ?? []) as $i => $ing) {
         $qty = $num_or_null($ing['quantity'] ?? null);
@@ -34,6 +34,7 @@ $insert_children = function (string $recipeId, array $body) use ($num_or_null) {
                        $step['content'] ?? '', $timer === null ? null : (int)$timer, $now]);
     }
     foreach (($body['tagIds'] ?? []) as $tagId) {
+        owned_or_404('tags', $tagId, $uid);
         db()->prepare('INSERT INTO recipe_tags (recipe_id,tag_id,created_at) VALUES (?,?,?)')
             ->execute([$recipeId, $tagId, $now]);
     }
@@ -49,6 +50,7 @@ if ($path === '/recipes' && $method === 'GET') {
 // CREATE -----------------------------------------------------------------
 if ($path === '/recipes' && $method === 'POST') {
     $b = read_json_body();
+    if (!empty($b['folder_id'])) owned_or_404('folders', $b['folder_id'], $uid);
     $id = uuid4();
     $now = gmdate('Y-m-d H:i:s');
     $sourceType = !empty($b['source_url']) ? 'web' : 'manual';
@@ -147,6 +149,7 @@ if (preg_match('#^/recipes/([a-f0-9-]{36})$#', $path, $m)) {
 
     if ($method === 'PATCH') {
         $b = read_json_body();
+        if (!empty($b['folder_id'])) owned_or_404('folders', $b['folder_id'], $uid);
         $scalar = ['title','description','cover_image_url','source_url','source_author','folder_id',
                    'prep_time_minutes','cook_time_minutes','total_time_minutes','yield_amount','yield_unit',
                    'notes','is_favorite','last_cooked_at','status'];

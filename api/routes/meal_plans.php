@@ -37,8 +37,14 @@ if (preg_match('#^/meal-plans/([a-f0-9-]{36})$#', $path, $m)) {
     owned_or_404('meal_plans', $m[1], $uid);
     if ($method === 'PATCH') {
         $b = read_json_body();
-        db()->prepare('UPDATE meal_plans SET planned_date = ?, meal_type = ? WHERE id = ?')
-            ->execute([$b['planned_date'] ?? null, $b['meal_type'] ?? null, $m[1]]);
+        $set = []; $vals = [];
+        if (array_key_exists('planned_date', $b)) { $set[] = 'planned_date = ?'; $vals[] = $b['planned_date']; }
+        if (array_key_exists('meal_type', $b))    { $set[] = 'meal_type = ?';    $vals[] = $b['meal_type']; }
+        if (array_key_exists('position', $b))      { $set[] = 'position = ?';     $vals[] = (int)$b['position']; }
+        if ($set) {
+            $vals[] = $m[1];
+            db()->prepare('UPDATE meal_plans SET ' . implode(', ', $set) . ' WHERE id = ?')->execute($vals);
+        }
         json_ok(['ok' => true]);
     }
     if ($method === 'DELETE') {

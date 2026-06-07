@@ -44,6 +44,7 @@ if (preg_match('#^/collections/([a-f0-9-]{36})/recipes$#', $path, $m)) {
     }
     if ($method === 'POST') {
         $b = read_json_body();
+        owned_or_404('recipes', $b['recipe_id'] ?? '', $uid);
         $cnt = db()->prepare('SELECT COUNT(*) c FROM collection_recipes WHERE collection_id = ?');
         $cnt->execute([$m[1]]);
         $pos = (int)$cnt->fetch()['c'];

@@ -37,3 +37,9 @@ api('POST', '/auth/signup', ['email' => 'coll2_' . bin2hex(random_bytes(4)) . '@
 check('cross-user sees 0 collections', count(api('GET', '/collections')['json']['data']) === 0);
 check('cross-user cannot read collection recipes', in_array(api('GET', "/collections/$cid/recipes")['status'], [403, 404], true));
 check('cross-user cannot delete collection', in_array(api('DELETE', "/collections/$cid")['status'], [403, 404], true));
+
+// C2 cannot add C1's recipe to a C2 collection, and cannot add to C1's collection
+$c2coll = api('POST', '/collections', ['title' => 'C2 coll', 'description' => '']);
+$c2cid = $c2coll['json']['data']['id'];
+$foreignAdd = api('POST', "/collections/$c2cid/recipes", ['recipe_id' => $rid]);
+check('cannot add a recipe you do not own (403/404)', in_array($foreignAdd['status'], [403, 404], true));
