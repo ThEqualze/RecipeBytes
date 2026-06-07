@@ -28,6 +28,7 @@ api/
   routes/
     auth.php             signup / login / logout / session handlers
   schema.sql             Full MySQL schema (15 tables)
+router.php               Local dev-server front controller (php -S); prod uses .htaccess
 tests/
   harness.php            assert + HTTP helpers (curl based)
   run.php                Test runner (includes all test_*.php)
@@ -431,7 +432,7 @@ git commit -m "feat(db): add MySQL schema converted from Supabase migrations"
 ## Task 4: PHP bootstrap — config, DB, helpers, router
 
 **Files:**
-- Create: `api/db.php`, `api/lib/response.php`, `api/lib/uuid.php`, `api/index.php`
+- Create: `api/db.php`, `api/lib/response.php`, `api/lib/uuid.php`, `api/index.php`, `router.php`
 
 **Context:** A minimal front controller. `index.php` computes the path after `/api`, then `include`s the matching route file. Route files call helpers from `lib/`. We add a `GET /api/health` endpoint first so we can test the skeleton end-to-end before auth.
 
@@ -536,21 +537,52 @@ try {
 }
 ```
 
-- [ ] **Step 5: Start the server and verify the health endpoint**
+- [ ] **Step 5: Write `router.php` (dev-server front controller)**
+
+The PHP built-in server (`php -S`) does NOT route sub-paths like `/api/health` to `api/index.php` on its own — it 404s. This tiny router script (used only for local dev; production uses `.htaccess`) forwards `/api/*` to the API front controller and lets the built-in server serve any real static file directly.
+
+```php
+<?php
+// Local dev front controller for: php -S 127.0.0.1:8000 router.php
+// Production does NOT use this file (Apache .htaccess handles routing).
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+if (preg_match('#^/api(/|$)#', $path)) {
+    require __DIR__ . '/api/index.php';
+    return true;
+}
+
+// Serve an existing static file as-is
+$file = __DIR__ . $path;
+if ($path !== '/' && is_file($file)) {
+    return false;
+}
+
+// SPA fallback (only meaningful once the frontend is built into ./index.html)
+if (is_file(__DIR__ . '/index.html')) {
+    require __DIR__ . '/index.html';
+    return true;
+}
+return false;
+```
+
+- [ ] **Step 6: Start the server and verify the health endpoint**
+
+Note: on this machine the MariaDB server (XAMPP) is already running on 127.0.0.1:3306 — do not start a database. Start the PHP dev server with the router script:
 
 ```bash
-php -S 127.0.0.1:8000 -t . >/tmp/php-server.log 2>&1 &
+php -S 127.0.0.1:8000 router.php >/tmp/php-server.log 2>&1 &
 sleep 1
 curl -s http://127.0.0.1:8000/api/health
 ```
 
 Expected: `{"data":{"status":"ok"}}`
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add api/index.php api/db.php api/lib/response.php api/lib/uuid.php
-git commit -m "feat(api): add PHP router, PDO connection, and response helpers"
+git add api/index.php api/db.php api/lib/response.php api/lib/uuid.php router.php
+git commit -m "feat(api): add PHP router, PDO connection, response helpers, dev front controller"
 ```
 
 ---
@@ -951,10 +983,9 @@ check('anonymous cannot list recipes (401)', $anon['status'] === 401);
 - [ ] **Step 4: Run tests to verify the security contract passes**
 
 ```bash
-# restart server so new files load
-pkill -f "php -S 127.0.0.1:8000" 2>/dev/null; sleep 1
-php -S 127.0.0.1:8000 -t . >/tmp/php-server.log 2>&1 &
-sleep 1
+# The PHP built-in server reloads route files per request, so no restart is
+# normally needed. If the server is not already running, start it:
+#   php -S 127.0.0.1:8000 router.php >/tmp/php-server.log 2>&1 &
 php tests/run.php
 ```
 
