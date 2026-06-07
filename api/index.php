@@ -5,7 +5,7 @@ require __DIR__ . '/db.php';
 
 // Path after the /api prefix, e.g. "/auth/login"
 $uri  = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$path = preg_replace('#^.*/api#', '', $uri);
+$path = preg_replace('#^.*?/api#', '', $uri);
 $path = '/' . trim($path, '/');
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -55,5 +55,6 @@ try {
 
     json_error('Not found', 404);
 } catch (Throwable $e) {
+    error_log('API error: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
     json_error('Server error', 500);
 }
