@@ -718,7 +718,7 @@ check('duplicate email rejected 409', $dup['status'] === 409);
 $out = api('POST', '/auth/logout');
 check('logout returns 200', $out['status'] === 200);
 $s2 = api('GET', '/auth/session');
-check('session is null after logout', ($s2['json']['data'] ?? 'x') === null);
+check('session is null after logout', array_key_exists('data', $s2['json']) && $s2['json']['data'] === null);
 
 // Login with correct password works
 reset_cookies();
