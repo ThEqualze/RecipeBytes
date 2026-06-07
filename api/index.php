@@ -3,6 +3,11 @@
 // corrupt the JSON. Errors are still logged (see the catch in this file).
 ini_set('display_errors', '0');
 
+// Buffer all output so that a stray BOM/whitespace in any included file
+// (e.g. a config.php saved with a BOM by a web editor) can be discarded
+// before we emit JSON. index.php itself must stay BOM-free for this to work.
+ob_start();
+
 require __DIR__ . '/lib/response.php';
 require __DIR__ . '/lib/uuid.php';
 require __DIR__ . '/db.php';
