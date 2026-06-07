@@ -76,7 +76,7 @@ export function LibraryView({
         return copy.sort((a, b) => b.title.localeCompare(a.title));
       case 'cook-time':
         return copy.sort(
-          (a, b) => (a.total_time_min ?? 9999) - (b.total_time_min ?? 9999)
+          (a, b) => (a.total_time_minutes ?? 9999) - (b.total_time_minutes ?? 9999)
         );
       default:
         return copy;

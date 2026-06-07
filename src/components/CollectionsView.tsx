@@ -6,7 +6,6 @@ import {
   Lock,
   MoreHorizontal,
   Trash2,
-  Pencil,
   Link,
   X,
 } from 'lucide-react';

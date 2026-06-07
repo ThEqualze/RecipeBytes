@@ -149,6 +149,9 @@ export interface GroceryListItem {
   quantity: number | null;
   unit: string;
   aisle: Aisle;
+  is_checked: boolean;
+  position: number;
+  created_at: string;
   updated_at: string;
 }
 

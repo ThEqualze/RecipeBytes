@@ -82,8 +82,8 @@ export function RecipeDetail({
   const handleCopyRecipe = async () => {
     const lines: string[] = [recipe.title, ''];
     if (recipe.description) lines.push(recipe.description, '');
-    if (recipe.total_time_min) lines.push(`Total time: ${formatTime(recipe.total_time_min)}`);
-    if (recipe.servings) lines.push(`Servings: ${recipe.servings}`);
+    if (recipe.total_time_minutes) lines.push(`Total time: ${formatTime(recipe.total_time_minutes)}`);
+    if (recipe.yield_amount) lines.push(`Servings: ${recipe.yield_amount}`);
     lines.push('', 'INGREDIENTS', '');
     ingredients.forEach((ing) => {
       const qty = ing.quantity ? formatQuantity(ing.quantity * scale) : '';
@@ -93,7 +93,7 @@ export function RecipeDetail({
     });
     lines.push('', 'INSTRUCTIONS', '');
     instructions.forEach((step, i) => {
-      lines.push(`${i + 1}. ${step.body}`);
+      lines.push(`${i + 1}. ${step.content}`);
     });
     if (recipe.source_url) lines.push('', `Source: ${recipe.source_url}`);
     await navigator.clipboard.writeText(lines.join('\n'));

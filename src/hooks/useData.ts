@@ -15,16 +15,6 @@ import type {
   CollectionRecipe,
 } from '../lib/database.types';
 
-// NOTE (Task 2 minimal fix): the verbatim plan code reads `is_checked` on grocery
-// items (also consumed by GroceryView.tsx), but `GroceryListItem` in
-// database.types.ts does not declare it. Augment the type so the field resolves
-// without touching other files. Remove once database.types.ts gains the field.
-declare module '../lib/database.types' {
-  interface GroceryListItem {
-    is_checked: boolean;
-  }
-}
-
 async function safe<T>(p: Promise<T>, fallback: T): Promise<T> {
   try {
     return await p;
