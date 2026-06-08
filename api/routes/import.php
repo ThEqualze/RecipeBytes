@@ -79,7 +79,11 @@ function safe_fetch(string $url, ?string &$error = null): ?string {
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_TIMEOUT => 12,
             CURLOPT_CONNECTTIMEOUT => 6,
-            CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; RecipeBytes/1.0; +https://recipebytes.co.uk)',
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+            CURLOPT_HTTPHEADER => [
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language: en-GB,en;q=0.9',
+            ],
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_NOPROGRESS => false,
             CURLOPT_PROGRESSFUNCTION => function ($ch, $dlTotal, $dlNow) use ($maxBytes) {
