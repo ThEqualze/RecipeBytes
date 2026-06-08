@@ -27,3 +27,7 @@ api/config.php
 .env.development
 .env.production
 /dist
+
+# Deploy build artifacts
+recipebytes-deploy.zip
+deploy_stage/
