@@ -49,6 +49,7 @@ export interface InstructionRow {
 interface RecipeEditorProps {
   mode: 'create' | 'edit';
   recipe?: Recipe;
+  initialForm?: RecipeFormData;
   initialIngredients?: Ingredient[];
   initialInstructions?: Instruction[];
   folders: Folder[];
@@ -69,6 +70,7 @@ function emptyInstruction(): InstructionRow {
 export function RecipeEditor({
   mode,
   recipe,
+  initialForm,
   initialIngredients,
   initialInstructions,
   folders,
@@ -77,21 +79,32 @@ export function RecipeEditor({
   onDelete,
   onCancel,
 }: RecipeEditorProps) {
+  const seed = mode === 'create' ? initialForm : undefined;
   const [saving, setSaving] = useState(false);
-  const [title, setTitle] = useState(recipe?.title ?? '');
-  const [description, setDescription] = useState(recipe?.description ?? '');
-  const [coverUrl, setCoverUrl] = useState(recipe?.cover_image_url ?? '');
-  const [sourceUrl, setSourceUrl] = useState(recipe?.source_url ?? '');
-  const [sourceAuthor, setSourceAuthor] = useState(recipe?.source_author ?? '');
-  const [folderId, setFolderId] = useState<string | null>(recipe?.folder_id ?? null);
-  const [prepTime, setPrepTime] = useState(String(recipe?.prep_time_minutes ?? ''));
-  const [cookTime, setCookTime] = useState(String(recipe?.cook_time_minutes ?? ''));
-  const [yieldAmount, setYieldAmount] = useState(String(recipe?.yield_amount ?? ''));
-  const [yieldUnit, setYieldUnit] = useState(recipe?.yield_unit ?? 'servings');
-  const [notes, setNotes] = useState(recipe?.notes ?? '');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [title, setTitle] = useState(seed?.title ?? recipe?.title ?? '');
+  const [description, setDescription] = useState(seed?.description ?? recipe?.description ?? '');
+  const [coverUrl, setCoverUrl] = useState(seed?.cover_image_url ?? recipe?.cover_image_url ?? '');
+  const [sourceUrl, setSourceUrl] = useState(seed?.source_url ?? recipe?.source_url ?? '');
+  const [sourceAuthor, setSourceAuthor] = useState(seed?.source_author ?? recipe?.source_author ?? '');
+  const [folderId, setFolderId] = useState<string | null>(seed?.folder_id ?? recipe?.folder_id ?? null);
+  const [prepTime, setPrepTime] = useState(
+    seed ? String(seed.prep_time_minutes || '') : String(recipe?.prep_time_minutes ?? '')
+  );
+  const [cookTime, setCookTime] = useState(
+    seed ? String(seed.cook_time_minutes || '') : String(recipe?.cook_time_minutes ?? '')
+  );
+  const [yieldAmount, setYieldAmount] = useState(
+    seed ? String(seed.yield_amount || '') : String(recipe?.yield_amount ?? '')
+  );
+  const [yieldUnit, setYieldUnit] = useState(seed?.yield_unit ?? recipe?.yield_unit ?? 'servings');
+  const [notes, setNotes] = useState(seed?.notes ?? recipe?.notes ?? '');
+  const [selectedTags, setSelectedTags] = useState<string[]>(seed?.tagIds ?? []);
   const [ingredients, setIngredients] = useState<IngredientRow[]>(
-    initialIngredients?.length
+    seed
+      ? seed.ingredients.length
+        ? seed.ingredients.map((i) => ({ ...i }))
+        : [emptyIngredient()]
+      : initialIngredients?.length
       ? initialIngredients.map((i) => ({
           id: i.id,
           quantity: i.quantity != null ? String(i.quantity) : '',
@@ -103,7 +116,11 @@ export function RecipeEditor({
       : [emptyIngredient()]
   );
   const [instructions, setInstructions] = useState<InstructionRow[]>(
-    initialInstructions?.length
+    seed
+      ? seed.instructions.length
+        ? seed.instructions.map((s) => ({ ...s }))
+        : [emptyInstruction()]
+      : initialInstructions?.length
       ? initialInstructions.map((s) => ({
           id: s.id,
           content: s.content,

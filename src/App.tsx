@@ -87,6 +87,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
   const [view, setView] = useState<ViewKey>({ kind: 'library', filter: 'all' });
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<'create' | 'edit' | null>(null);
+  const [importedForm, setImportedForm] = useState<RecipeFormData | null>(null);
   const [search, setSearch] = useState('');
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [importOpen, setImportOpen] = useState(false);
@@ -306,16 +307,21 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
         {editorMode === 'create' ? (
           <RecipeEditor
             mode="create"
+            initialForm={importedForm ?? undefined}
             folders={folders}
             tags={tags}
             onSave={async (data: RecipeFormData) => {
               const id = await createRecipe(data);
               setEditorMode(null);
+              setImportedForm(null);
               await refetchRecipes();
               await refetchTags();
               if (id) setActiveRecipeId(id);
             }}
-            onCancel={() => setEditorMode(null)}
+            onCancel={() => {
+              setEditorMode(null);
+              setImportedForm(null);
+            }}
           />
         ) : editorMode === 'edit' && activeRecipe ? (
           <RecipeEditor
@@ -448,7 +454,15 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
         )}
       </main>
 
-      <ImportModal open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={(data) => {
+          setImportedForm(data);
+          setImportOpen(false);
+          setEditorMode('create');
+        }}
+      />
 
       {kitchenRecipeId && activeRecipe && kitchenRecipeId === activeRecipe.id && (
         <KitchenMode
