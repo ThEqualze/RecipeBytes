@@ -11,4 +11,8 @@ return [
     'session_ttl' => 60 * 60 * 24,
     // Set true in production (HTTPS) so the cookie is Secure
     'cookie_secure' => false,
+    // Google AI Studio (Gemini) — server-side only. Leave key empty to disable
+    // the AI fallback (JSON-LD-only import still works).
+    'gemini_api_key' => '',
+    'gemini_model'   => 'gemini-2.0-flash',
 ];

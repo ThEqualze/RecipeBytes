@@ -33,6 +33,7 @@ $routes = [
     '/collections'     => 'collections.php',
     '/pantry'          => 'pantry.php',
     '/public'          => 'public.php',
+    '/import'          => 'import.php',
 ];
 
 function path_matches(string $path, string $prefix): bool {
