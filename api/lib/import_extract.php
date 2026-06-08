@@ -178,3 +178,52 @@ function extract_jsonld_recipe(string $html, string $url): ?array {
     }
     return null;
 }
+
+// ---- Gemini fallback mapper ----
+
+function map_gemini_recipe(array $g, string $url): array {
+    $form = empty_recipe_form($url);
+    $str = fn($k) => (isset($g[$k]) && is_string($g[$k])) ? trim($g[$k]) : '';
+    $int = fn($k) => isset($g[$k]) && is_numeric($g[$k]) ? (int)$g[$k] : 0;
+
+    $form['title'] = $str('title') !== '' ? $str('title') : 'Imported Recipe';
+    $form['description'] = $str('description');
+    $form['source_author'] = $str('source_author');
+    $form['cover_image_url'] = $str('cover_image_url');
+    $form['prep_time_minutes'] = $int('prep_time_minutes');
+    $form['cook_time_minutes'] = $int('cook_time_minutes');
+    $form['total_time_minutes'] = $int('total_time_minutes');
+    if (isset($g['yield_amount']) && is_numeric($g['yield_amount'])) $form['yield_amount'] = (float)$g['yield_amount'];
+    if ($str('yield_unit') !== '') $form['yield_unit'] = $str('yield_unit');
+
+    if (isset($g['ingredients']) && is_array($g['ingredients'])) {
+        foreach ($g['ingredients'] as $ing) {
+            if (is_string($ing)) {
+                if (trim($ing) !== '') {
+                    $form['ingredients'][] = ['quantity' => '', 'unit' => '', 'name' => trim($ing), 'prep_note' => '', 'group_name' => ''];
+                }
+            } elseif (is_array($ing)) {
+                $name = isset($ing['name']) && is_string($ing['name']) ? trim($ing['name']) : '';
+                if ($name === '') continue;
+                $form['ingredients'][] = [
+                    'quantity' => isset($ing['quantity']) ? (string)$ing['quantity'] : '',
+                    'unit' => isset($ing['unit']) && is_string($ing['unit']) ? trim($ing['unit']) : '',
+                    'name' => $name,
+                    'prep_note' => isset($ing['prep_note']) && is_string($ing['prep_note']) ? trim($ing['prep_note']) : '',
+                    'group_name' => '',
+                ];
+            }
+        }
+    }
+    if (isset($g['instructions']) && is_array($g['instructions'])) {
+        foreach ($g['instructions'] as $step) {
+            $content = '';
+            if (is_string($step)) $content = trim($step);
+            elseif (is_array($step) && isset($step['content']) && is_string($step['content'])) $content = trim($step['content']);
+            if ($content !== '') {
+                $form['instructions'][] = ['content' => $content, 'timer_seconds' => '', 'group_name' => ''];
+            }
+        }
+    }
+    return $form;
+}

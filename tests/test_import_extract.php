@@ -66,3 +66,37 @@ check('jsonld numeric yield', $r2['yield_amount'] === 2.0);
 
 // no recipe present
 check('jsonld absent -> null', extract_jsonld_recipe('<html><body>nothing</body></html>', 'https://x.test') === null);
+
+// ---- Gemini mapper ----
+$gem = [
+  'title' => 'Gemini Stew',
+  'description' => 'Hearty',
+  'source_author' => 'Some Blog',
+  'cover_image_url' => 'https://img.test/stew.jpg',
+  'prep_time_minutes' => 15,
+  'cook_time_minutes' => 90,
+  'total_time_minutes' => 105,
+  'yield_amount' => 6,
+  'yield_unit' => 'bowls',
+  'ingredients' => [
+    ['quantity' => '500', 'unit' => 'g', 'name' => 'beef', 'prep_note' => 'cubed'],
+    ['name' => 'salt'],
+  ],
+  'instructions' => [
+    ['content' => 'Brown the beef'],
+    ['content' => 'Simmer'],
+  ],
+];
+$m = map_gemini_recipe($gem, 'https://blog.test/stew');
+check('gemini title', $m['title'] === 'Gemini Stew');
+check('gemini source_url', $m['source_url'] === 'https://blog.test/stew');
+check('gemini times', $m['cook_time_minutes'] === 90 && $m['total_time_minutes'] === 105);
+check('gemini yield', $m['yield_amount'] === 6.0 && $m['yield_unit'] === 'bowls');
+check('gemini ingredient split', $m['ingredients'][0]['quantity'] === '500' && $m['ingredients'][0]['name'] === 'beef' && $m['ingredients'][0]['prep_note'] === 'cubed');
+check('gemini ingredient partial', $m['ingredients'][1]['name'] === 'salt' && $m['ingredients'][1]['unit'] === '');
+check('gemini instructions', count($m['instructions']) === 2 && $m['instructions'][0]['content'] === 'Brown the beef');
+
+// empty/garbage gemini object still yields a safe form
+$m2 = map_gemini_recipe([], 'https://x.test');
+check('gemini empty -> default title', $m2['title'] === 'Imported Recipe');
+check('gemini empty -> no ingredients', $m2['ingredients'] === []);
