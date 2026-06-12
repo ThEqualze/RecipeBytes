@@ -107,6 +107,36 @@ function jsonld_yield($y): array {
     return [1.0, 'servings'];
 }
 
+// Convert a free-text quantity ("½", "1 ½", "1/2", "1 1/2", "4", "1.5") to a
+// float for the DECIMAL quantity column. Returns null for blank, ranges, or
+// anything unparseable — callers store NULL rather than guess a wrong number.
+function parse_quantity($v): ?float {
+    if (is_int($v) || is_float($v)) return (float)$v;
+    if (!is_string($v)) return null;
+    $s = trim($v);
+    if ($s === '') return null;
+    // Ranges ("1-2", "1 to 2") are ambiguous -> null.
+    if (preg_match('/\d\s*(?:-|–|to)\s*\d/u', $s)) return null;
+    // Plain integer or decimal.
+    if (preg_match('/^\d+(?:\.\d+)?$/', $s)) return (float)$s;
+    $uni = ['½'=>0.5,'⅓'=>1/3,'⅔'=>2/3,'¼'=>0.25,'¾'=>0.75,'⅕'=>0.2,'⅖'=>0.4,'⅗'=>0.6,
+            '⅘'=>0.8,'⅙'=>1/6,'⅚'=>5/6,'⅛'=>0.125,'⅜'=>0.375,'⅝'=>0.625,'⅞'=>0.875,
+            '⅐'=>1/7,'⅑'=>1/9,'⅒'=>0.1];
+    // Bare or mixed unicode fraction: "½", "1 ½".
+    if (preg_match('/^(\d+)?\s*([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅐⅛⅜⅝⅞⅑⅒])$/u', $s, $m)) {
+        $whole = $m[1] !== '' ? (float)$m[1] : 0.0;
+        return $whole + $uni[$m[2]];
+    }
+    // Bare or mixed ascii fraction: "1/2", "1 1/2".
+    if (preg_match('#^(?:(\d+)\s+)?(\d+)\s*/\s*(\d+)$#', $s, $m)) {
+        $den = (float)$m[3];
+        if ($den == 0.0) return null;
+        $whole = ($m[1] ?? '') !== '' ? (float)$m[1] : 0.0;
+        return $whole + (float)$m[2] / $den;
+    }
+    return null;
+}
+
 // Split a free-text ingredient line ("½ teaspoon black pepper (for steak)")
 // into {quantity, unit, name, prep_note}. Lossless on quantity: keeps the
 // source's textual form (fractions, unicode glyphs, ranges) since the editor's

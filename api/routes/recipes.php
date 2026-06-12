@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../lib/ownership.php';
 require_once __DIR__ . '/../lib/serialize.php';
+require_once __DIR__ . '/../lib/import_extract.php';
 
 $path = $GLOBALS['ROUTE_PATH'];
 $method = $GLOBALS['ROUTE_METHOD'];
@@ -17,7 +18,7 @@ $num_or_null = function ($v) {
 $insert_children = function (string $recipeId, array $body) use ($num_or_null, $uid) {
     $now = gmdate('Y-m-d H:i:s');
     foreach (($body['ingredients'] ?? []) as $i => $ing) {
-        $qty = $num_or_null($ing['quantity'] ?? null);
+        $qty = parse_quantity($ing['quantity'] ?? null); // accepts "½", "1 ½", "1/2" -> decimal
         $raw = trim(implode(' ', array_filter([
             (string)($ing['quantity'] ?? ''), $ing['unit'] ?? '', $ing['name'] ?? '', $ing['prep_note'] ?? ''
         ], fn($s) => $s !== '')));

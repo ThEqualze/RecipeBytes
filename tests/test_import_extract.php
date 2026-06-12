@@ -93,6 +93,22 @@ check('jsonld numeric yield', $r2['yield_amount'] === 2.0);
 // no recipe present
 check('jsonld absent -> null', extract_jsonld_recipe('<html><body>nothing</body></html>', 'https://x.test') === null);
 
+// ---- parse_quantity (free-text qty -> decimal for the DB column) ----
+check('qty blank -> null', parse_quantity('') === null);
+check('qty null -> null', parse_quantity(null) === null);
+check('qty integer', parse_quantity('4') === 4.0);
+check('qty decimal', parse_quantity('1.5') === 1.5);
+check('qty passthrough float', parse_quantity(2.5) === 2.5);
+check('qty unicode half', parse_quantity('½') === 0.5);
+check('qty unicode quarter', parse_quantity('¾') === 0.75);
+check('qty mixed unicode', parse_quantity('1 ½') === 1.5);
+check('qty ascii fraction', parse_quantity('1/2') === 0.5);
+check('qty mixed ascii fraction', parse_quantity('1 1/2') === 1.5);
+check('qty range -> null', parse_quantity('1-2') === null);
+check('qty "1 to 2" -> null', parse_quantity('1 to 2') === null);
+check('qty garbage -> null', parse_quantity('a pinch') === null);
+check('qty divide by zero -> null', parse_quantity('1/0') === null);
+
 // ---- Gemini mapper ----
 $gem = [
   'title' => 'Gemini Stew',
