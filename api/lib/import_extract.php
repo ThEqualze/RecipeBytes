@@ -107,6 +107,50 @@ function jsonld_yield($y): array {
     return [1.0, 'servings'];
 }
 
+// Split a free-text ingredient line ("½ teaspoon black pepper (for steak)")
+// into {quantity, unit, name, prep_note}. Lossless on quantity: keeps the
+// source's textual form (fractions, unicode glyphs, ranges) since the editor's
+// Qty field is free text. Conservative — only strips a unit it recognises.
+function parse_ingredient_line(string $line): array {
+    $out = ['quantity' => '', 'unit' => '', 'name' => '', 'prep_note' => '', 'group_name' => ''];
+    $s = trim($line);
+    // Strip a leading list bullet ("- ", "* ", "• ").
+    $s = preg_replace('/^[-*•·]\s+/u', '', $s);
+
+    // Pull a trailing parenthetical into prep_note: "... (chopped)".
+    if (preg_match('/^(.*?)\s*\(([^()]*)\)\s*$/u', $s, $pm)) {
+        $s = trim($pm[1]);
+        $out['prep_note'] = trim($pm[2]);
+    }
+
+    // Leading quantity: digits / decimals / ASCII fractions / unicode fractions,
+    // optionally a mixed-or-range second piece ("1 ½", "1-2", "1 to 2").
+    $num = '(?:\d+(?:\.\d+)?(?:\s*\/\s*\d+)?|[½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅐⅛⅜⅝⅞⅑⅒])';
+    if (preg_match('/^(' . $num . '(?:\s*(?:-|–|to)\s*' . $num . '|\s+' . $num . ')?)\s*/u', $s, $qm)) {
+        $out['quantity'] = trim($qm[1]);
+        $s = trim(substr($s, strlen($qm[0])));
+    }
+
+    // Optional unit immediately after the quantity (or leading, e.g. "Pinch of salt").
+    $units = 'teaspoons?|tsp|tablespoons?|tbsp|tbs|cups?|ounces?|oz|pounds?|lbs?'
+        . '|grams?|g|kilograms?|kg|milliliters?|millilitres?|ml|liters?|litres?|l'
+        . '|pinch(?:es)?|cloves?|cans?|packages?|pkgs?|sticks?|slices?|dash(?:es)?'
+        . '|quarts?|qt|pints?|pt|gallons?|gal|handfuls?|sprigs?|bunch(?:es)?';
+    if (preg_match('/^(' . $units . ')\b\.?\s*/ui', $s, $um)) {
+        $out['unit'] = $um[1];
+        $s = trim(substr($s, strlen($um[0])));
+        // Drop a connecting "of" ("Pinch of salt", "2 cloves of garlic").
+        $s = preg_replace('/^of\s+/ui', '', $s);
+    }
+
+    $out['name'] = trim($s);
+    // Degenerate parse (no name survived): fall back to the raw line as the name.
+    if ($out['name'] === '') {
+        $out = ['quantity' => '', 'unit' => '', 'name' => trim(preg_replace('/^[-*•·]\s+/u', '', $line)), 'prep_note' => '', 'group_name' => ''];
+    }
+    return $out;
+}
+
 function jsonld_ingredients($ing): array {
     $out = [];
     if (is_array($ing)) {
@@ -157,7 +201,7 @@ function map_jsonld_recipe(array $r, string $url): array {
     $form['yield_amount'] = $amt;
     $form['yield_unit'] = $unit;
     foreach (jsonld_ingredients($r['recipeIngredient'] ?? null) as $line) {
-        $form['ingredients'][] = ['quantity' => '', 'unit' => '', 'name' => $line, 'prep_note' => '', 'group_name' => ''];
+        $form['ingredients'][] = parse_ingredient_line($line);
     }
     foreach (jsonld_instructions($r['recipeInstructions'] ?? null) as $content) {
         $form['instructions'][] = ['content' => $content, 'timer_seconds' => '', 'group_name' => ''];
@@ -200,7 +244,7 @@ function map_gemini_recipe(array $g, string $url): array {
         foreach ($g['ingredients'] as $ing) {
             if (is_string($ing)) {
                 if (trim($ing) !== '') {
-                    $form['ingredients'][] = ['quantity' => '', 'unit' => '', 'name' => trim($ing), 'prep_note' => '', 'group_name' => ''];
+                    $form['ingredients'][] = parse_ingredient_line($ing);
                 }
             } elseif (is_array($ing)) {
                 $name = isset($ing['name']) && is_string($ing['name']) ? trim($ing['name']) : '';

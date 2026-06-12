@@ -55,7 +55,33 @@ check('jsonld times', $r['prep_time_minutes'] === 10 && $r['cook_time_minutes'] 
 check('jsonld yield split', $r['yield_amount'] === 4.0 && $r['yield_unit'] === 'servings');
 check('jsonld source_url preserved', $r['source_url'] === 'https://blog.test/pancakes');
 check('jsonld 2 ingredients (blank dropped)', count($r['ingredients']) === 2);
-check('jsonld ingredient line in name', $r['ingredients'][0]['name'] === '2 cups flour' && $r['ingredients'][0]['quantity'] === '');
+check('jsonld ingredient parsed qty/unit/name',
+    $r['ingredients'][0]['quantity'] === '2'
+    && $r['ingredients'][0]['unit'] === 'cups'
+    && $r['ingredients'][0]['name'] === 'flour');
+check('jsonld ingredient parsed tbsp',
+    $r['ingredients'][1]['quantity'] === '1'
+    && $r['ingredients'][1]['unit'] === 'tbsp'
+    && $r['ingredients'][1]['name'] === 'sugar');
+
+// ---- parse_ingredient_line (the qty/unit splitter) ----
+$p = parse_ingredient_line('- ½ teaspoon black pepper (for steak)');
+check('parse unicode frac + unit + prep',
+    $p['quantity'] === '½' && $p['unit'] === 'teaspoon' && $p['name'] === 'black pepper' && $p['prep_note'] === 'for steak');
+$p = parse_ingredient_line('4 tablespoons unsalted butter');
+check('parse plural unit', $p['quantity'] === '4' && $p['unit'] === 'tablespoons' && $p['name'] === 'unsalted butter');
+$p = parse_ingredient_line('2 garlic cloves (minced)');
+check('parse qty, unknown-position unit stays in name',
+    $p['quantity'] === '2' && $p['unit'] === '' && $p['name'] === 'garlic cloves' && $p['prep_note'] === 'minced');
+$p = parse_ingredient_line('Pinch of kosher salt (for butter)');
+check('parse leading unit, no qty, "of" dropped',
+    $p['quantity'] === '' && $p['unit'] === 'Pinch' && $p['name'] === 'kosher salt' && $p['prep_note'] === 'for butter');
+$p = parse_ingredient_line('Salt to taste');
+check('parse plain text -> all in name', $p['quantity'] === '' && $p['unit'] === '' && $p['name'] === 'Salt to taste');
+$p = parse_ingredient_line('1 ½ cups flour');
+check('parse mixed number', $p['quantity'] === '1 ½' && $p['unit'] === 'cups' && $p['name'] === 'flour');
+$p = parse_ingredient_line('500 g beef');
+check('parse abbrev unit g', $p['quantity'] === '500' && $p['unit'] === 'g' && $p['name'] === 'beef');
 check('jsonld 2 instructions', count($r['instructions']) === 2 && $r['instructions'][1]['content'] === 'Cook it');
 
 // instructions as plain strings + recipeYield as number
