@@ -11,6 +11,7 @@ import {
   Ruler,
   Pencil,
   ChefHat,
+  Camera,
   ShoppingBasket,
   Check,
   Printer,
@@ -105,6 +106,8 @@ export function RecipeDetail({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const heroImage = recipe.cook_image_url || recipe.cover_image_url;
+
   const scaledYield = useMemo(
     () => +(recipe.yield_amount * scale).toFixed(2),
     [recipe.yield_amount, scale]
@@ -117,8 +120,8 @@ export function RecipeDetail({
     <div className="flex flex-col h-full overflow-y-auto scrollbar-thin animate-fade-in">
       <div className="relative">
         <div className="h-48 sm:h-72 lg:h-80 overflow-hidden bg-stone-100">
-          {recipe.cover_image_url ? (
-            <img src={recipe.cover_image_url} alt={recipe.title} className="w-full h-full object-cover" />
+          {heroImage ? (
+            <img src={heroImage} alt={recipe.title} className="w-full h-full object-cover" />
           ) : null}
           <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/0 to-black/30" />
         </div>
@@ -213,7 +216,7 @@ export function RecipeDetail({
               title="Share your cook"
               className="w-9 h-9 rounded-md bg-white/90 backdrop-blur flex items-center justify-center hover:bg-white transition-colors"
             >
-              <ChefHat className="w-4 h-4 text-stone-600" />
+              <Camera className="w-4 h-4 text-stone-600" />
             </button>
             <button
               onClick={onEdit}
@@ -506,7 +509,7 @@ export function RecipeDetail({
             title: recipe.title,
             description: recipe.description,
             cover_image_url: recipe.cover_image_url,
-            cook_image_url: recipe.cook_image_url ?? '',
+            cook_image_url: recipe.cook_image_url,
           }}
           onClose={() => setCookShareOpen(false)}
           onUpdated={onUpdated}
