@@ -9,6 +9,8 @@ import {
   Folder,
   FolderOpen,
   ChevronRight,
+  Pencil,
+  Trash2,
   Hash,
   LogOut,
   BookOpen,
@@ -51,6 +53,9 @@ interface SidebarProps {
   onImport: () => void;
   onNewRecipe: () => void;
   onCreateFolder: (name: string) => Promise<string | null>;
+  onRenameFolder: (id: string, name: string) => void | Promise<void>;
+  onDeleteFolder: (id: string) => void | Promise<void>;
+  onCreateTag: (name: string) => Promise<string | null>;
   userEmail?: string;
   userName?: string;
   onSignOut?: () => void;
@@ -99,6 +104,9 @@ export function Sidebar({
   onImport,
   onNewRecipe,
   onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onCreateTag,
   userEmail,
   userName,
   onSignOut,
@@ -112,6 +120,8 @@ export function Sidebar({
   const [foldersOpen, setFoldersOpen] = useState(true);
   const [addingFolder, setAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
 
   const toggleFolder = (id: string) =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -121,6 +131,13 @@ export function Sidebar({
     setNewFolderName('');
     setAddingFolder(false);
     if (name) await onCreateFolder(name);
+  };
+
+  const submitNewTag = async () => {
+    const name = newTagName.trim();
+    setNewTagName('');
+    setAddingTag(false);
+    if (name) await onCreateTag(name);
   };
 
   return (
@@ -264,6 +281,8 @@ export function Sidebar({
                   counts={recipeCounts.byFolder}
                   activeView={activeView}
                   onSelect={onSelect}
+                  onRename={onRenameFolder}
+                  onDelete={onDeleteFolder}
                 />
               ))}
             </>
@@ -275,7 +294,30 @@ export function Sidebar({
           collapsible
           open={tagsOpen}
           onToggle={() => setTagsOpen(!tagsOpen)}
+          action={
+            <button
+              onClick={() => { setTagsOpen(true); setAddingTag(true); }}
+              title="New tag"
+              className="opacity-0 group-hover:opacity-100 hover:bg-stone-200 rounded p-0.5 transition"
+            >
+              <Plus className="w-[12px] h-[12px] text-stone-500" />
+            </button>
+          }
         >
+          {tagsOpen && addingTag && (
+            <input
+              autoFocus
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitNewTag();
+                else if (e.key === 'Escape') { setNewTagName(''); setAddingTag(false); }
+              }}
+              onBlur={submitNewTag}
+              placeholder="Tag name"
+              className="w-full text-[13px] px-2 py-1 mb-0.5 bg-white border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-stone-900/10"
+            />
+          )}
           {tagsOpen &&
             tags.map((tag) => (
               <button
@@ -403,6 +445,8 @@ function FolderItem({
   counts,
   activeView,
   onSelect,
+  onRename,
+  onDelete,
 }: {
   node: FolderTreeNode;
   depth: number;
@@ -411,10 +455,21 @@ function FolderItem({
   counts: Record<string, number>;
   activeView: ViewKey;
   onSelect: (v: ViewKey) => void;
+  onRename: (id: string, name: string) => void | Promise<void>;
+  onDelete: (id: string) => void | Promise<void>;
 }) {
   const isOpen = expanded[node.id];
   const hasChildren = node.children.length > 0;
   const active = isViewActive(activeView, { kind: 'folder', folderId: node.id });
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(node.name);
+
+  const commitRename = () => {
+    const name = nameDraft.trim();
+    setRenaming(false);
+    if (name && name !== node.name) onRename(node.id, name);
+    else setNameDraft(node.name);
+  };
 
   return (
     <div>
@@ -423,7 +478,7 @@ function FolderItem({
           active ? 'bg-stone-200/70 text-stone-900' : 'text-stone-600 hover:bg-stone-100'
         }`}
         style={{ paddingLeft: 8 + depth * 12 }}
-        onClick={() => onSelect({ kind: 'folder', folderId: node.id })}
+        onClick={() => { if (!renaming) onSelect({ kind: 'folder', folderId: node.id }); }}
       >
         <button
           onClick={(e) => {
@@ -445,10 +500,44 @@ function FolderItem({
         ) : (
           <Folder className="w-[14px] h-[14px] text-stone-500 shrink-0" />
         )}
-        <span className="flex-1 truncate">{node.name}</span>
-        <span className="text-[11px] text-stone-400 tabular-nums">
-          {counts[node.id] ?? 0}
-        </span>
+        {renaming ? (
+          <input
+            autoFocus
+            value={nameDraft}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename();
+              else if (e.key === 'Escape') { setNameDraft(node.name); setRenaming(false); }
+            }}
+            onBlur={commitRename}
+            className="flex-1 min-w-0 text-[13px] px-1 py-0.5 bg-white border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-stone-900/10"
+          />
+        ) : (
+          <>
+            <span className="flex-1 truncate">{node.name}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); setNameDraft(node.name); setRenaming(true); }}
+              title="Rename folder"
+              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:bg-stone-200/70 shrink-0"
+            >
+              <Pencil className="w-3 h-3 text-stone-500" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Delete folder "${node.name}"? Recipes inside won't be deleted.`)) onDelete(node.id);
+              }}
+              title="Delete folder"
+              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 shrink-0"
+            >
+              <Trash2 className="w-3 h-3 text-stone-500" />
+            </button>
+            <span className="text-[11px] text-stone-400 tabular-nums">
+              {counts[node.id] ?? 0}
+            </span>
+          </>
+        )}
       </div>
       {isOpen &&
         node.children.map((child) => (
@@ -461,6 +550,8 @@ function FolderItem({
             counts={counts}
             activeView={activeView}
             onSelect={onSelect}
+            onRename={onRename}
+            onDelete={onDelete}
           />
         ))}
     </div>

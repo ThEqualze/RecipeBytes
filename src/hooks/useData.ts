@@ -48,7 +48,18 @@ export function useFolders(userId: string | undefined) {
     [userId]
   );
 
-  return { folders, loading, refetch: fetch, createFolder };
+  const updateFolder = useCallback(async (id: string, name: string) => {
+    setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)));
+    await safe(api.patch(`/folders/${id}`, { name }), null);
+  }, []);
+
+  const deleteFolder = useCallback(async (id: string) => {
+    setFolders((prev) => prev.filter((f) => f.id !== id));
+    await safe(api.del(`/folders/${id}`), null);
+    await fetch(); // resync — deleting a folder cascade-deletes its subfolders
+  }, [fetch]);
+
+  return { folders, loading, refetch: fetch, createFolder, updateFolder, deleteFolder };
 }
 
 export function useTags(userId: string | undefined) {
@@ -62,7 +73,18 @@ export function useTags(userId: string | undefined) {
   }, [userId]);
 
   useEffect(() => { fetch(); }, [fetch]);
-  return { tags, loading, refetch: fetch };
+
+  const createTag = useCallback(
+    async (name: string): Promise<string | null> => {
+      if (!userId) return null;
+      const created = await safe(api.post<Tag>('/tags', { name }), null as Tag | null);
+      if (created) setTags((prev) => [...prev, created]);
+      return created?.id ?? null;
+    },
+    [userId]
+  );
+
+  return { tags, loading, refetch: fetch, createTag };
 }
 
 export function useRecipes(userId: string | undefined) {
