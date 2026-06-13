@@ -20,13 +20,18 @@ header('Content-Type: text/html; charset=utf-8');
 
 $recipe = null;
 if ($token !== '' && preg_match('/^[A-Za-z0-9]+$/', $token)) {
-    $stmt = db()->prepare(
-        'SELECT r.title, r.description, r.cook_image_url, r.cover_image_url
-           FROM shared_recipes sr JOIN recipes r ON r.id = sr.recipe_id
-          WHERE sr.token = ?'
-    );
-    $stmt->execute([$token]);
-    $recipe = $stmt->fetch();
+    try {
+        $stmt = db()->prepare(
+            'SELECT r.title, r.description, r.cook_image_url, r.cover_image_url
+               FROM shared_recipes sr JOIN recipes r ON r.id = sr.recipe_id
+              WHERE sr.token = ?'
+        );
+        $stmt->execute([$token]);
+        $recipe = $stmt->fetch();
+    } catch (\Throwable $e) {
+        // DB hiccup on a public share link: degrade to the plain SPA shell.
+        $recipe = null;
+    }
 }
 
 if (!$recipe) {
@@ -35,7 +40,7 @@ if (!$recipe) {
     exit;
 }
 
-$image = $recipe['cook_image_url'] !== '' ? $recipe['cook_image_url'] : $recipe['cover_image_url'];
+$image = !empty($recipe['cook_image_url']) ? $recipe['cook_image_url'] : ($recipe['cover_image_url'] ?? '');
 echo og_render($template, [
     'title'       => $recipe['title'],
     'description' => $recipe['description'],
