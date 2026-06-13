@@ -70,6 +70,8 @@ $pub2 = api('POST', "/recipes/$rid/share");
 check('share publish idempotent (same token)',
     $pub1['status'] === 200 && $pub2['status'] === 200
     && $pub1['json']['data']['token'] === $pub2['json']['data']['token']);
+check('publish returns the original token (continuity)',
+    $pub1['json']['data']['token'] === $token);
 
 $tok = $pub1['json']['data']['token'];
 $before = api('GET', "/public/recipes/$tok", null, false);

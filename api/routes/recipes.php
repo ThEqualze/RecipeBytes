@@ -86,8 +86,10 @@ if (preg_match('#^/recipes/([a-f0-9-]{36})/instructions$#', $path, $m) && $metho
 }
 if (preg_match('#^/recipes/([a-f0-9-]{36})/share$#', $path, $m) && $method === 'POST') {
     owned_or_404('recipes', $m[1], $uid);
-    // Idempotent: one canonical token per recipe — reuse if it already exists.
-    $existing = db()->prepare('SELECT token FROM shared_recipes WHERE recipe_id = ? LIMIT 1');
+    // Reuse this recipe's existing share token if it has one. Best-effort: there
+    // is no DB uniqueness on recipe_id and legacy rows may have several, so pick
+    // the oldest deterministically rather than minting a new token each time.
+    $existing = db()->prepare('SELECT token FROM shared_recipes WHERE recipe_id = ? ORDER BY created_at ASC LIMIT 1');
     $existing->execute([$m[1]]);
     $row = $existing->fetch();
     if ($row) {
