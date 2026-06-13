@@ -74,6 +74,7 @@ export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogP
     if (!cookUrl) return null;
     try {
       const res = await fetch(cookUrl);
+      if (!res.ok) return null;
       const blob = await res.blob();
       const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
       return new File([blob], `dish.${ext}`, { type: blob.type });
@@ -98,9 +99,13 @@ export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogP
   };
 
   const copyLink = async () => {
-    await navigator.clipboard.writeText(linkUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(linkUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('Could not copy — please copy the link manually.');
+    }
   };
 
   const net = networkShareLinks(linkUrl, caption, cookUrl || undefined);
@@ -111,7 +116,7 @@ export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogP
       <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold text-stone-900">Share your cook</h2>
-          <button onClick={onClose} className="p-1 text-stone-400 hover:text-stone-600"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-stone-400 hover:text-stone-600"><X className="w-5 h-5" /></button>
         </div>
 
         {/* Photo */}
@@ -132,17 +137,20 @@ export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogP
         </div>
 
         {/* Public toggle */}
-        <label className="flex items-center justify-between gap-3 py-2">
-          <span className="text-[13px] text-stone-700">Make this recipe public<br /><span className="text-[12px] text-stone-400">People who open your link can view the recipe.</span></span>
+        <div className="flex items-center justify-between gap-3 py-2">
+          <span id="public-toggle-label" className="text-[13px] text-stone-700">Make this recipe public<br /><span className="text-[12px] text-stone-400">People who open your link can view the recipe.</span></span>
           <button
             type="button"
+            role="switch"
+            aria-checked={publicOn}
+            aria-labelledby="public-toggle-label"
             onClick={togglePublic}
             disabled={busy}
             className={`relative w-11 h-6 rounded-full transition-colors ${publicOn ? 'bg-emerald-500' : 'bg-stone-300'} disabled:opacity-50`}
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${publicOn ? 'translate-x-5' : ''}`} />
           </button>
-        </label>
+        </div>
 
         {error && <p className="text-[12px] text-red-600">{error}</p>}
 
@@ -158,13 +166,17 @@ export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogP
 
         {/* Fallback links */}
         <div className="flex flex-wrap gap-2">
-          <a href={net.x} target="_blank" rel="noreferrer" className="px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">X</a>
-          <a href={net.facebook} target="_blank" rel="noreferrer" className="px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">Facebook</a>
-          <a href={net.whatsapp} target="_blank" rel="noreferrer" className="px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">WhatsApp</a>
-          <a href={net.pinterest} target="_blank" rel="noreferrer" className="px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">Pinterest</a>
-          <button type="button" onClick={copyLink} className="inline-flex items-center gap-1 px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Link2 className="w-3.5 h-3.5" />} Copy link
-          </button>
+          {publicOn && token && (
+            <>
+              <a href={net.x} target="_blank" rel="noreferrer" className="px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">X</a>
+              <a href={net.facebook} target="_blank" rel="noreferrer" className="px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">Facebook</a>
+              <a href={net.whatsapp} target="_blank" rel="noreferrer" className="px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">WhatsApp</a>
+              <a href={net.pinterest} target="_blank" rel="noreferrer" className="px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">Pinterest</a>
+              <button type="button" onClick={copyLink} className="inline-flex items-center gap-1 px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Link2 className="w-3.5 h-3.5" />} Copy link
+              </button>
+            </>
+          )}
           {cookUrl && (
             <a href={cookUrl} download className="inline-flex items-center gap-1 px-3 py-1.5 text-[12px] border border-stone-200 rounded-lg hover:bg-stone-50">
               <Download className="w-3.5 h-3.5" /> Save image
