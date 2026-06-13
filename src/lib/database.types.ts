@@ -72,6 +72,7 @@ export interface Recipe {
   source_url: string;
   source_author: string;
   cover_image_url: string;
+  cook_image_url: string;
   yield_amount: number;
   yield_unit: string;
   prep_time_minutes: number;
