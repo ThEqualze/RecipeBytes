@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm ci
@@ -37,7 +37,7 @@ jobs:
       # Deploys the built site to public_html. No --delete, and config.php is
       # excluded, so the server's secrets/DB config are never touched.
       - name: Deploy to 20i via rsync over SSH
-        uses: burnett01/rsync-deployments@7.0.2
+        uses: burnett01/rsync-deployments@v8
         with:
           switches: -rltzv --exclude=config.php --exclude=schema.sql
           path: deploy/
