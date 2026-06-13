@@ -177,6 +177,30 @@ export function RecipeDetail({
               </button>
               {shareOpen && (
                 <div className="absolute right-0 top-11 z-50 w-52 bg-white rounded-xl shadow-xl border border-stone-200 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                  {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                    <button
+                      onClick={async () => {
+                        setShareOpen(false);
+                        const url = await onShare();
+                        if (!url) return;
+                        try {
+                          await navigator.share({
+                            title: recipe.title,
+                            text: `Check out this recipe: ${recipe.title}`,
+                            url,
+                          });
+                          setShared(true);
+                          setTimeout(() => setShared(false), 2500);
+                        } catch {
+                          /* share sheet dismissed/cancelled — ignore */
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-[14px] text-stone-700 hover:bg-stone-50 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4 text-stone-500" />
+                      Share…
+                    </button>
+                  )}
                   <button
                     onClick={async () => {
                       const url = await onShare();
