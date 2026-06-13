@@ -60,6 +60,9 @@ $p = uploads_paths(['upload_dir' => '/custom/up/', 'upload_base_url' => '/media/
 check('paths override dir', $p['dir'] === '/custom/up');
 check('paths override base_url', $p['base_url'] === '/media');
 
+$p = uploads_paths(['upload_base_url' => '/media\\'], '/x/api');
+check('paths override base_url trims backslash', $p['base_url'] === '/media');
+
 // --- ensure_uploads_dir: creates the dir and writes a hardening .htaccess ---
 $base   = sys_get_temp_dir() . '/rb_up_' . bin2hex(random_bytes(4));
 $covers = $base . '/uploads/covers';
@@ -68,6 +71,11 @@ check('uploads dir created', is_dir($covers));
 check('hardening htaccess written', file_exists($base . '/uploads/.htaccess'));
 check('htaccess denies scripts',
     strpos((string)file_get_contents($base . '/uploads/.htaccess'), 'Require all denied') !== false);
+
+// idempotent + never truncates a pre-existing .htaccess
+file_put_contents($base . '/uploads/.htaccess', 'SENTINEL');
+check('ensure_uploads_dir idempotent returns true', ensure_uploads_dir($covers) === true);
+check('existing htaccess preserved', file_get_contents($base . '/uploads/.htaccess') === 'SENTINEL');
 
 @unlink($base . '/uploads/.htaccess');
 @rmdir($covers); @rmdir($base . '/uploads'); @rmdir($base);
