@@ -15,4 +15,12 @@ return [
     // the AI fallback (JSON-LD-only import still works).
     'gemini_api_key' => '',
     'gemini_model'   => 'gemini-2.0-flash',
+    // --- Cover image uploads ---------------------------------------------
+    // Where uploaded cover images are written, and the public URL they map to.
+    // Leave commented to auto-derive: <web_root>/uploads/covers served at
+    // /uploads/covers (web root = the parent of the api/ directory). Override
+    // only if your layout differs, e.g. a local dev server whose doc-root is
+    // not the web root.
+    // 'upload_dir'      => __DIR__ . '/../uploads/covers',
+    // 'upload_base_url' => '/uploads/covers',
 ];
