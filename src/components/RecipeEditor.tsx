@@ -62,6 +62,8 @@ interface RecipeEditorProps {
   onCancel: () => void;
 }
 
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
 function emptyIngredient(): IngredientRow {
   return { quantity: '', unit: '', name: '', prep_note: '', group_name: '' };
 }
@@ -95,8 +97,7 @@ export function RecipeEditor({
     const file = e.target.files?.[0];
     e.target.value = ''; // allow re-picking the same file later
     if (!file) return;
-    const okTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!okTypes.includes(file.type)) {
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       setUploadError('Use a JPEG, PNG, WebP, or GIF image.');
       return;
     }
@@ -273,7 +274,7 @@ export function RecipeEditor({
                 <input
                   type="url"
                   value={coverUrl}
-                  onChange={(e) => setCoverUrl(e.target.value)}
+                  onChange={(e) => { setCoverUrl(e.target.value); setUploadError(''); }}
                   placeholder="Paste an image URL…"
                   className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-stone-200 rounded-lg placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/5 focus:border-stone-300"
                 />
@@ -281,7 +282,7 @@ export function RecipeEditor({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
+                disabled={uploading || saving}
                 className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-stone-700 bg-white border border-stone-200 rounded-lg hover:bg-stone-50 disabled:opacity-50"
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
