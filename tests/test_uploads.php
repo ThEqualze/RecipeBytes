@@ -13,35 +13,39 @@ $FIX = [
   'gif'  => 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
   'jpeg' => '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AfwD/2Q==',
   'webp' => 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=',
+  'bmp'  => 'Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAATCwAAEwsAAAAAAAAAAAAAAAD/AA==',
 ];
 
-// --- validate_image_upload: valid images map to the right extension ---
+// --- validate_image_upload: valid supported images map to the right extension ---
 $png = _rb_fixture($FIX['png']);
-$r = validate_image_upload(filesize($png), $png);
-check('png accepted as png', $r['error'] === null && $r['ext'] === 'png');
+check('png accepted as png', (function () use ($png) { $r = validate_image_upload($png); return $r['error'] === null && $r['ext'] === 'png'; })());
 
 $gif = _rb_fixture($FIX['gif']);
-$r = validate_image_upload(filesize($gif), $gif);
-check('gif accepted as gif', $r['error'] === null && $r['ext'] === 'gif');
+check('gif accepted as gif', (function () use ($gif) { $r = validate_image_upload($gif); return $r['error'] === null && $r['ext'] === 'gif'; })());
 
 $jpg = _rb_fixture($FIX['jpeg']);
-$r = validate_image_upload(filesize($jpg), $jpg);
-check('jpeg accepted as jpg', $r['error'] === null && $r['ext'] === 'jpg');
+check('jpeg accepted as jpg', (function () use ($jpg) { $r = validate_image_upload($jpg); return $r['error'] === null && $r['ext'] === 'jpg'; })());
 
 $webp = _rb_fixture($FIX['webp']);
-$r = validate_image_upload(filesize($webp), $webp);
-check('webp accepted as webp', $r['error'] === null && $r['ext'] === 'webp');
+check('webp accepted as webp', (function () use ($webp) { $r = validate_image_upload($webp); return $r['error'] === null && $r['ext'] === 'webp'; })());
 
-// --- validate_image_upload: rejections ---
-$r = validate_image_upload(6 * 1024 * 1024, $png);
-check('oversize rejected', $r['ext'] === null && $r['error'] !== null);
+// --- rejections ---
+// Oversize: a real >5MB file (size check fires before the image sniff).
+$big = tempnam(sys_get_temp_dir(), 'rbupl');
+file_put_contents($big, str_repeat("\0", 6 * 1024 * 1024));
+check('oversize rejected', (function () use ($big) { $r = validate_image_upload($big); return $r['ext'] === null && $r['error'] !== null; })());
 
-$r = validate_image_upload(0, $png);
-check('empty rejected', $r['ext'] === null && $r['error'] !== null);
+// Empty: tempnam() yields a real 0-byte file.
+$empty = tempnam(sys_get_temp_dir(), 'rbupl');
+check('empty rejected', (function () use ($empty) { $r = validate_image_upload($empty); return $r['ext'] === null && $r['error'] !== null; })());
 
+// Non-image: plain text.
 $txt = tempnam(sys_get_temp_dir(), 'rbupl');
 file_put_contents($txt, 'this is plainly not an image');
-$r = validate_image_upload(filesize($txt), $txt);
-check('non-image rejected', $r['ext'] === null && $r['error'] !== null);
+check('non-image rejected', (function () use ($txt) { $r = validate_image_upload($txt); return $r['ext'] === null && $r['error'] !== null; })());
 
-foreach ([$png, $gif, $jpg, $webp, $txt] as $f) @unlink($f);
+// Valid image but unsupported type: a real 1x1 BMP (getimagesize type 6).
+$bmp = _rb_fixture($FIX['bmp']);
+check('unsupported type (bmp) rejected', (function () use ($bmp) { $r = validate_image_upload($bmp); return $r['ext'] === null && $r['error'] !== null; })());
+
+foreach ([$png, $gif, $jpg, $webp, $big, $empty, $txt, $bmp] as $f) @unlink($f);

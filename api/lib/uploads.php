@@ -14,10 +14,12 @@ function upload_allowed_types(): array {
 }
 
 // Validate a just-uploaded image by size and by sniffing the real bytes.
+// Size is measured from the file on disk (never trust a caller-supplied size).
 // Returns ['ext' => 'jpg', 'error' => null] on success,
 // or ['ext' => null, 'error' => '<reason>'] on failure.
-function validate_image_upload(int $size, string $tmpPath): array {
-    if ($size <= 0) {
+function validate_image_upload(string $tmpPath): array {
+    $size = @filesize($tmpPath);
+    if ($size === false || $size <= 0) {
         return ['ext' => null, 'error' => 'The file is empty.'];
     }
     if ($size > UPLOAD_MAX_BYTES) {
