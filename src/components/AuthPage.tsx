@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ChefHat, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import rbLogo from '../assets/rb-logo-hat.png';
 
 export function AuthPage() {
   const { signIn, signUp } = useAuth();
@@ -49,11 +50,9 @@ export function AuthPage() {
       <div className="flex-1 flex flex-col items-center justify-center px-6 sm:px-12 lg:px-20">
         <div className="w-full max-w-[380px]">
           <div className="flex items-center gap-2.5 mb-10">
-            <div className="w-9 h-9 rounded-lg bg-stone-900 text-stone-50 flex items-center justify-center">
-              <ChefHat className="w-5 h-5" strokeWidth={2} />
-            </div>
+            <img src={rbLogo} alt="RecipeBytes" className="w-9 h-9 object-contain shrink-0" />
             <span className="font-display text-[20px] font-semibold text-stone-900">
-              Mise
+              RecipeBytes
             </span>
           </div>
 

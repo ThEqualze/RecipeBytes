@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  ChefHat,
   Search,
   Plus,
   Inbox,
@@ -20,6 +19,7 @@ import {
   Refrigerator,
 } from 'lucide-react';
 import type { Folder as FolderRow, Tag } from '../lib/database.types';
+import rbLogo from '../assets/rb-logo-hat.png';
 
 export type ViewKey =
   | { kind: 'library'; filter?: 'all' | 'favorites' | 'recent' }
@@ -116,11 +116,9 @@ export function Sidebar({
     <aside className="w-full h-full shrink-0 border-r border-stone-200 bg-stone-50 flex flex-col">
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-md bg-stone-900 text-stone-50 flex items-center justify-center">
-            <ChefHat className="w-[18px] h-[18px]" strokeWidth={2} />
-          </div>
+          <img src={rbLogo} alt="RecipeBytes" className="w-8 h-8 object-contain shrink-0" />
           <div className="flex flex-col leading-tight">
-            <span className="font-display text-[15px] font-semibold text-stone-900">Mise</span>
+            <span className="font-display text-[15px] font-semibold text-stone-900">RecipeBytes</span>
             <span className="text-[11px] text-stone-500 font-medium">Demo workspace</span>
           </div>
         </div>
