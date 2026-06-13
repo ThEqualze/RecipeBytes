@@ -95,7 +95,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [ready, setReady] = useState(false);
 
-  const { folders } = useFolders(userId);
+  const { folders, createFolder } = useFolders(userId);
   const { tags } = useTags(userId);
   const { recipes, toggleFavorite, markCooked, refetch: refetchRecipes } = useRecipes(userId);
   const { recipeTagIds, refetch: refetchTags } = useRecipeTags(userId);
@@ -278,6 +278,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
       >
         <Sidebar
           folders={folders}
+          onCreateFolder={createFolder}
           tags={tags}
           recipeCounts={recipeCounts}
           activeView={view}

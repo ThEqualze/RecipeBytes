@@ -50,6 +50,7 @@ interface SidebarProps {
   onSearchChange: (value: string) => void;
   onImport: () => void;
   onNewRecipe: () => void;
+  onCreateFolder: (name: string) => Promise<string | null>;
   userEmail?: string;
   userName?: string;
   onSignOut?: () => void;
@@ -97,6 +98,7 @@ export function Sidebar({
   onSearchChange,
   onImport,
   onNewRecipe,
+  onCreateFolder,
   userEmail,
   userName,
   onSignOut,
@@ -108,9 +110,18 @@ export function Sidebar({
   });
   const [tagsOpen, setTagsOpen] = useState(true);
   const [foldersOpen, setFoldersOpen] = useState(true);
+  const [addingFolder, setAddingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
 
   const toggleFolder = (id: string) =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const submitNewFolder = async () => {
+    const name = newFolderName.trim();
+    setNewFolderName('');
+    setAddingFolder(false);
+    if (name) await onCreateFolder(name);
+  };
 
   return (
     <aside className="w-full h-full shrink-0 border-r border-stone-200 bg-stone-50 flex flex-col">
@@ -218,24 +229,45 @@ export function Sidebar({
           open={foldersOpen}
           onToggle={() => setFoldersOpen(!foldersOpen)}
           action={
-            <button className="opacity-0 group-hover:opacity-100 hover:bg-stone-200 rounded p-0.5 transition">
+            <button
+              onClick={() => { setFoldersOpen(true); setAddingFolder(true); }}
+              title="New folder"
+              className="opacity-0 group-hover:opacity-100 hover:bg-stone-200 rounded p-0.5 transition"
+            >
               <Plus className="w-[12px] h-[12px] text-stone-500" />
             </button>
           }
         >
-          {foldersOpen &&
-            tree.map((node) => (
-              <FolderItem
-                key={node.id}
-                node={node}
-                depth={0}
-                expanded={expanded}
-                toggle={toggleFolder}
-                counts={recipeCounts.byFolder}
-                activeView={activeView}
-                onSelect={onSelect}
-              />
-            ))}
+          {foldersOpen && (
+            <>
+              {addingFolder && (
+                <input
+                  autoFocus
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitNewFolder();
+                    else if (e.key === 'Escape') { setNewFolderName(''); setAddingFolder(false); }
+                  }}
+                  onBlur={submitNewFolder}
+                  placeholder="Folder name"
+                  className="w-full text-[13px] px-2 py-1 mb-0.5 bg-white border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-stone-900/10"
+                />
+              )}
+              {tree.map((node) => (
+                <FolderItem
+                  key={node.id}
+                  node={node}
+                  depth={0}
+                  expanded={expanded}
+                  toggle={toggleFolder}
+                  counts={recipeCounts.byFolder}
+                  activeView={activeView}
+                  onSelect={onSelect}
+                />
+              ))}
+            </>
+          )}
         </NavGroup>
 
         <NavGroup
