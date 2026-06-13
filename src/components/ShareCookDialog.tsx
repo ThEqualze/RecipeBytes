@@ -12,6 +12,10 @@ interface ShareCookDialogProps {
 export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogProps) {
   const [cookUrl, setCookUrl] = useState(recipe.cook_image_url || '');
   const [pickedFile, setPickedFile] = useState<File | null>(null);
+  // A File kept ready ahead of the tap so navigator.share() can be called
+  // synchronously inside the click — mobile (esp. iOS) blocks share() if you
+  // await anything (like fetching the image) first.
+  const [shareFile, setShareFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [publicOn, setPublicOn] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -28,6 +32,23 @@ export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogP
       .catch(() => { /* leave as private if status can't be loaded */ });
     return () => { active = false; };
   }, [recipe.id]);
+
+  // Keep a shareable File ready: the just-picked file, or fetched from the
+  // stored photo URL. Done ahead of time so the Share tap stays synchronous.
+  useEffect(() => {
+    if (pickedFile) { setShareFile(pickedFile); return; }
+    if (!cookUrl) { setShareFile(null); return; }
+    let active = true;
+    fetch(cookUrl)
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (!active || !blob) return;
+        const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        setShareFile(new File([blob], `dish.${ext}`, { type: blob.type }));
+      })
+      .catch(() => { /* fall back to a link/text-only share */ });
+    return () => { active = false; };
+  }, [cookUrl, pickedFile]);
 
   const origin = window.location.origin;
   const caption = cookCaption(recipe.title);
@@ -77,34 +98,21 @@ export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogP
     }
   };
 
-  // Get a File for native sharing: the just-picked file, or fetch the stored image.
-  const fileForShare = async (): Promise<File | null> => {
-    if (pickedFile) return pickedFile;
-    if (!cookUrl) return null;
-    try {
-      const res = await fetch(cookUrl);
-      if (!res.ok) return null;
-      const blob = await res.blob();
-      const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-      return new File([blob], `dish.${ext}`, { type: blob.type });
-    } catch { return null; }
-  };
-
-  const nativeShare = async () => {
+  // Open the native share sheet. Called synchronously from the tap (no awaits
+  // before navigator.share) so mobile browsers keep the user-activation that
+  // share() requires; the shareable File was prepared ahead of time.
+  const nativeShare = () => {
     setError('');
-    const file = await fileForShare();
     const text = `${caption}${publicOn && token ? ` ${linkUrl}` : ''}`;
-    try {
-      if (file && canShareFiles(file)) {
-        await navigator.share({ files: [file], text, url: publicOn && token ? linkUrl : undefined });
-      } else if (typeof navigator.share === 'function') {
-        await navigator.share({ text, url: publicOn && token ? linkUrl : undefined });
-      } else {
-        setError('Sharing is not supported here — use the buttons below.');
-      }
-    } catch {
-      /* user cancelled the share sheet — ignore */
+    const url = publicOn && token ? linkUrl : undefined;
+    if (typeof navigator.share !== 'function') {
+      setError('Sharing isn’t supported here — use the buttons below.');
+      return;
     }
+    const data: ShareData = shareFile && canShareFiles(shareFile)
+      ? { files: [shareFile], text, url }
+      : { text, url };
+    navigator.share(data).catch(() => { /* sheet dismissed/cancelled — ignore */ });
   };
 
   const copyLink = async () => {
