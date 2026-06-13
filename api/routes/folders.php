@@ -34,4 +34,24 @@ if ($path === '/folders' && $method === 'POST') {
     json_ok(serialize_row('folders', $stmt->fetch()));
 }
 
+if (preg_match('#^/folders/([a-f0-9-]{36})$#', $path, $m) && $method === 'PATCH') {
+    owned_or_404('folders', $m[1], $user['id']);
+    $b = read_json_body();
+    if (isset($b['name']) && is_string($b['name']) && trim($b['name']) !== '') {
+        db()->prepare('UPDATE folders SET name = ?, updated_at = ? WHERE id = ?')
+            ->execute([trim($b['name']), gmdate('Y-m-d H:i:s'), $m[1]]);
+    }
+    $stmt = db()->prepare('SELECT * FROM folders WHERE id = ?');
+    $stmt->execute([$m[1]]);
+    json_ok(serialize_row('folders', $stmt->fetch()));
+}
+
+if (preg_match('#^/folders/([a-f0-9-]{36})$#', $path, $m) && $method === 'DELETE') {
+    owned_or_404('folders', $m[1], $user['id']);
+    // Recipes in the folder are unfiled (FK ON DELETE SET NULL); child folders
+    // cascade-delete (FK ON DELETE CASCADE), and their recipes are unfiled too.
+    db()->prepare('DELETE FROM folders WHERE id = ?')->execute([$m[1]]);
+    json_ok(['ok' => true]);
+}
+
 json_error('Not found', 404);
