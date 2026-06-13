@@ -34,7 +34,21 @@ export function useFolders(userId: string | undefined) {
   }, [userId]);
 
   useEffect(() => { fetch(); }, [fetch]);
-  return { folders, loading, refetch: fetch };
+
+  const createFolder = useCallback(
+    async (name: string): Promise<string | null> => {
+      if (!userId) return null;
+      const created = await safe(
+        api.post<Folder>('/folders', { name }),
+        null as Folder | null
+      );
+      if (created) setFolders((prev) => [...prev, created]);
+      return created?.id ?? null;
+    },
+    [userId]
+  );
+
+  return { folders, loading, refetch: fetch, createFolder };
 }
 
 export function useTags(userId: string | undefined) {
