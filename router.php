@@ -8,6 +8,12 @@ if (preg_match('#^/api(/|$)#', $path)) {
     return true;
 }
 
+if (preg_match('#^/r/([A-Za-z0-9]+)$#', $path, $m)) {
+    $_GET['token'] = $m[1];
+    require __DIR__ . '/api/og.php';
+    return true;
+}
+
 // Serve an existing static file as-is
 $file = __DIR__ . $path;
 if ($path !== '/' && is_file($file)) {
