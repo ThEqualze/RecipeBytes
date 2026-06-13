@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -8,8 +8,11 @@ import {
   Clock,
   Users,
   Save,
+  Upload,
+  Loader2,
   X,
 } from 'lucide-react';
+import { api, ApiError } from '../lib/api';
 import type { Recipe, Ingredient, Instruction, Folder, Tag } from '../lib/database.types';
 
 export interface RecipeFormData {
@@ -84,6 +87,37 @@ export function RecipeEditor({
   const [title, setTitle] = useState(seed?.title ?? recipe?.title ?? '');
   const [description, setDescription] = useState(seed?.description ?? recipe?.description ?? '');
   const [coverUrl, setCoverUrl] = useState(seed?.cover_image_url ?? recipe?.cover_image_url ?? '');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCoverFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file later
+    if (!file) return;
+    const okTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!okTypes.includes(file.type)) {
+      setUploadError('Use a JPEG, PNG, WebP, or GIF image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Image must be 5 MB or smaller.');
+      return;
+    }
+    setUploadError('');
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const data = await api.upload<{ url: string }>('/uploads', fd);
+      setCoverUrl(data.url);
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? err.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const [sourceUrl, setSourceUrl] = useState(seed?.source_url ?? recipe?.source_url ?? '');
   const [sourceAuthor, setSourceAuthor] = useState(seed?.source_author ?? recipe?.source_author ?? '');
   const [folderId, setFolderId] = useState<string | null>(seed?.folder_id ?? recipe?.folder_id ?? null);
@@ -229,27 +263,44 @@ export function RecipeEditor({
             className="w-full text-[14px] text-stone-700 bg-transparent border border-stone-200 rounded-lg px-3 py-2.5 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/5 focus:border-stone-300 resize-none"
           />
 
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <label className="text-[11px] uppercase tracking-wider font-semibold text-stone-500 mb-1 block">
-                Cover image URL
-              </label>
-              <div className="relative">
+          <div className="space-y-2">
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-stone-500 block">
+              Cover image
+            </label>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 relative">
                 <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                 <input
                   type="url"
                   value={coverUrl}
                   onChange={(e) => setCoverUrl(e.target.value)}
-                  placeholder="https://..."
+                  placeholder="Paste an image URL…"
                   className="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-stone-200 rounded-lg placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/5 focus:border-stone-300"
                 />
               </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-stone-700 bg-white border border-stone-200 rounded-lg hover:bg-stone-50 disabled:opacity-50"
+              >
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {uploading ? 'Uploading…' : 'Upload'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleCoverFile}
+                className="hidden"
+              />
+              {coverUrl && (
+                <div className="w-16 h-16 rounded-lg overflow-hidden border border-stone-200 shrink-0">
+                  <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+                </div>
+              )}
             </div>
-            {coverUrl && (
-              <div className="w-16 h-16 rounded-lg overflow-hidden border border-stone-200 shrink-0">
-                <img src={coverUrl} alt="" className="w-full h-full object-cover" />
-              </div>
-            )}
+            {uploadError && <p className="text-[12px] text-red-600">{uploadError}</p>}
           </div>
         </section>
 
