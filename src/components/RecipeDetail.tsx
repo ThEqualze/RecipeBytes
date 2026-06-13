@@ -23,6 +23,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import type { Recipe, Ingredient, Instruction, Tag } from '../lib/database.types';
+import { ShareCookDialog } from './ShareCookDialog';
 import { sourceIcon, sourceLabel, sourceColor, formatTime, formatQuantity } from '../lib/format';
 
 interface RecipeDetailProps {
@@ -39,6 +40,7 @@ interface RecipeDetailProps {
   onShare: () => Promise<string | null>;
   onDelete: () => Promise<void>;
   onAddToGrocery: () => Promise<void>;
+  onUpdated: () => void;
 }
 
 export function RecipeDetail({
@@ -55,6 +57,7 @@ export function RecipeDetail({
   onShare,
   onDelete,
   onAddToGrocery,
+  onUpdated,
 }: RecipeDetailProps) {
   const [scale, setScale] = useState(1);
   const [unitSystem, setUnitSystem] = useState<'imperial' | 'metric'>('imperial');
@@ -65,6 +68,7 @@ export function RecipeDetail({
   const [cookedJust, setCookedJust] = useState(false);
   const [shared, setShared] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [cookShareOpen, setCookShareOpen] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -204,6 +208,13 @@ export function RecipeDetail({
                 </div>
               )}
             </div>
+            <button
+              onClick={() => setCookShareOpen(true)}
+              title="Share your cook"
+              className="w-9 h-9 rounded-md bg-white/90 backdrop-blur flex items-center justify-center hover:bg-white transition-colors"
+            >
+              <ChefHat className="w-4 h-4 text-stone-600" />
+            </button>
             <button
               onClick={onEdit}
               className="w-9 h-9 rounded-md bg-white/90 backdrop-blur flex items-center justify-center hover:bg-white transition-colors"
@@ -487,6 +498,20 @@ export function RecipeDetail({
           </section>
         </div>
       </div>
+
+      {cookShareOpen && (
+        <ShareCookDialog
+          recipe={{
+            id: recipe.id,
+            title: recipe.title,
+            description: recipe.description,
+            cover_image_url: recipe.cover_image_url,
+            cook_image_url: recipe.cook_image_url ?? '',
+          }}
+          onClose={() => setCookShareOpen(false)}
+          onUpdated={onUpdated}
+        />
+      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">

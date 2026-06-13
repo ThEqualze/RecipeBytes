@@ -389,6 +389,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
                 await addRecipeIngredients(activeRecipe.id, ingredients);
               }
             }}
+            onUpdated={refetchRecipes}
           />
         ) : view.kind === 'inbox' ? (
           <InboxView jobs={jobs} />
