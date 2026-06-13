@@ -49,3 +49,25 @@ $bmp = _rb_fixture($FIX['bmp']);
 check('unsupported type (bmp) rejected', (function () use ($bmp) { $r = validate_image_upload($bmp); return $r['ext'] === null && $r['error'] !== null; })());
 
 foreach ([$png, $gif, $jpg, $webp, $big, $empty, $txt, $bmp] as $f) @unlink($f);
+
+// --- uploads_paths: default derivation from the API directory ---
+$p = uploads_paths([], '/var/www/public_html/api');
+check('paths default dir', $p['dir'] === '/var/www/public_html/uploads/covers');
+check('paths default base_url', $p['base_url'] === '/uploads/covers');
+
+// --- uploads_paths: config overrides win (trailing slashes trimmed) ---
+$p = uploads_paths(['upload_dir' => '/custom/up/', 'upload_base_url' => '/media/'], '/x/api');
+check('paths override dir', $p['dir'] === '/custom/up');
+check('paths override base_url', $p['base_url'] === '/media');
+
+// --- ensure_uploads_dir: creates the dir and writes a hardening .htaccess ---
+$base   = sys_get_temp_dir() . '/rb_up_' . bin2hex(random_bytes(4));
+$covers = $base . '/uploads/covers';
+ensure_uploads_dir($covers);
+check('uploads dir created', is_dir($covers));
+check('hardening htaccess written', file_exists($base . '/uploads/.htaccess'));
+check('htaccess denies scripts',
+    strpos((string)file_get_contents($base . '/uploads/.htaccess'), 'Require all denied') !== false);
+
+@unlink($base . '/uploads/.htaccess');
+@rmdir($covers); @rmdir($base . '/uploads'); @rmdir($base);
