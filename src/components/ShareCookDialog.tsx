@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, Upload, Loader2, Share2, Link2, Download, Check } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { cookCaption, shareUrl, networkShareLinks, canShareFiles } from '../lib/share';
@@ -19,6 +19,15 @@ export function ShareCookDialog({ recipe, onClose, onUpdated }: ShareCookDialogP
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Seed the toggle from the recipe's current public state.
+  useEffect(() => {
+    let active = true;
+    api.get<{ token: string | null }>(`/recipes/${recipe.id}/share`)
+      .then((data) => { if (active && data.token) { setToken(data.token); setPublicOn(true); } })
+      .catch(() => { /* leave as private if status can't be loaded */ });
+    return () => { active = false; };
+  }, [recipe.id]);
 
   const origin = window.location.origin;
   const caption = cookCaption(recipe.title);
