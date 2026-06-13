@@ -16,12 +16,14 @@ if ($path === '/uploads' && $method === 'POST') {
         json_error('Upload failed — the file may be too large.', 400);
     }
 
-    $check = validate_image_upload((string)($file['tmp_name'] ?? ''));
+    $tmp = (string)($file['tmp_name'] ?? '');
+    $check = validate_image_upload($tmp);
     if ($check['error'] !== null) {
         json_error($check['error'], 400);
     }
 
     // dirname(__DIR__) is the API root (api/), whose parent is the web root.
+    // base_url is a relative path (e.g. /uploads/covers) served same-origin.
     $paths = uploads_paths(app_config(), dirname(__DIR__));
     if (!ensure_uploads_dir($paths['dir'])) {
         json_error('Upload storage is unavailable.', 500);
@@ -29,9 +31,11 @@ if ($path === '/uploads' && $method === 'POST') {
 
     $name = uuid4() . '.' . $check['ext'];
     $dest = $paths['dir'] . '/' . $name;
-    if (!move_uploaded_file($file['tmp_name'], $dest)) {
+    if (!move_uploaded_file($tmp, $dest)) {
         json_error('Could not save the uploaded file.', 500);
     }
 
     json_ok(['url' => $paths['base_url'] . '/' . $name]);
+} else {
+    json_error('Not found', 404);
 }
