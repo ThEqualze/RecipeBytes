@@ -8,6 +8,9 @@
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
+  # Server-rendered Open Graph tags for shared recipe links
+  RewriteRule ^r/([A-Za-z0-9]+)$ api/og.php?token=$1 [L,QSA]
+
   # SPA fallback: everything else serves the app shell
   RewriteRule ^ index.html [L]
 </IfModule>

@@ -64,6 +64,25 @@ check('share returns token', !empty($token));
 $resolve = api('GET', "/recipes/shared/$token");
 check('resolve token -> recipe_id', ($resolve['json']['data']['recipe_id'] ?? '') === $rid);
 
+// --- share publish is idempotent + revoke works ---
+$pub1 = api('POST', "/recipes/$rid/share");
+$pub2 = api('POST', "/recipes/$rid/share");
+check('share publish idempotent (same token)',
+    $pub1['status'] === 200 && $pub2['status'] === 200
+    && $pub1['json']['data']['token'] === $pub2['json']['data']['token']);
+check('publish returns the original token (continuity)',
+    $pub1['json']['data']['token'] === $token);
+
+$tok = $pub1['json']['data']['token'];
+$before = api('GET', "/public/recipes/$tok", null, false);
+check('public link live while published', $before['status'] === 200);
+
+$rev = api('DELETE', "/recipes/$rid/share");
+check('revoke ok', $rev['status'] === 200);
+
+$after = api('GET', "/public/recipes/$tok", null, false);
+check('public link 404s after revoke', $after['status'] === 404);
+
 // Delete (cascade children)
 $del = api('DELETE', "/recipes/$rid");
 check('delete 200', $del['status'] === 200);

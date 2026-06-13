@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS recipes (
   source_url         VARCHAR(2048) NOT NULL DEFAULT '',
   source_author      VARCHAR(512)  NOT NULL DEFAULT '',
   cover_image_url    VARCHAR(2048) NOT NULL DEFAULT '',
+  cook_image_url     VARCHAR(2048) NOT NULL DEFAULT '',
   yield_amount       DECIMAL(10,2) NOT NULL DEFAULT 1,
   yield_unit         VARCHAR(64)   NOT NULL DEFAULT 'servings',
   prep_time_minutes  INT           NOT NULL DEFAULT 0,

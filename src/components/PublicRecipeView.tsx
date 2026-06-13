@@ -70,14 +70,16 @@ export function PublicRecipeView({ token, onSignUp }: PublicRecipeViewProps) {
     return acc;
   }, {});
 
+  const heroImage = recipe.cook_image_url || recipe.cover_image_url;
+
   return (
     <div className="min-h-screen bg-stone-50">
       {/* Hero */}
       <div className="relative">
-        {recipe.cover_image_url ? (
+        {heroImage ? (
           <div className="h-[320px] sm:h-[400px] w-full overflow-hidden">
             <img
-              src={recipe.cover_image_url}
+              src={heroImage}
               alt={recipe.title}
               className="w-full h-full object-cover"
             />
@@ -87,9 +89,9 @@ export function PublicRecipeView({ token, onSignUp }: PublicRecipeViewProps) {
           <div className="h-[200px] bg-gradient-to-br from-stone-200 to-stone-300" />
         )}
 
-        <div className={`absolute bottom-0 left-0 right-0 px-6 sm:px-10 pb-8 ${recipe.cover_image_url ? 'text-white' : 'text-stone-900'}`}>
+        <div className={`absolute bottom-0 left-0 right-0 px-6 sm:px-10 pb-8 ${heroImage ? 'text-white' : 'text-stone-900'}`}>
           {shareMessage && (
-            <p className={`text-[13px] mb-2 ${recipe.cover_image_url ? 'text-white/80' : 'text-stone-500'}`}>
+            <p className={`text-[13px] mb-2 ${heroImage ? 'text-white/80' : 'text-stone-500'}`}>
               "{shareMessage}"
             </p>
           )}
@@ -97,7 +99,7 @@ export function PublicRecipeView({ token, onSignUp }: PublicRecipeViewProps) {
             {recipe.title}
           </h1>
           {recipe.source_author && (
-            <p className={`mt-1 text-[14px] ${recipe.cover_image_url ? 'text-white/70' : 'text-stone-500'}`}>
+            <p className={`mt-1 text-[14px] ${heroImage ? 'text-white/70' : 'text-stone-500'}`}>
               by {recipe.source_author}
             </p>
           )}

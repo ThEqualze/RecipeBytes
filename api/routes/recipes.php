@@ -84,12 +84,33 @@ if (preg_match('#^/recipes/([a-f0-9-]{36})/instructions$#', $path, $m) && $metho
     $stmt->execute([$m[1]]);
     json_ok(serialize_rows('instructions', $stmt->fetchAll()));
 }
+if (preg_match('#^/recipes/([a-f0-9-]{36})/share$#', $path, $m) && $method === 'GET') {
+    owned_or_404('recipes', $m[1], $uid);
+    $stmt = db()->prepare('SELECT token FROM shared_recipes WHERE recipe_id = ? ORDER BY created_at ASC, id ASC LIMIT 1');
+    $stmt->execute([$m[1]]);
+    $row = $stmt->fetch();
+    json_ok(['token' => $row ? $row['token'] : null]);
+}
 if (preg_match('#^/recipes/([a-f0-9-]{36})/share$#', $path, $m) && $method === 'POST') {
     owned_or_404('recipes', $m[1], $uid);
+    // Reuse this recipe's existing share token if it has one. Best-effort: there
+    // is no DB uniqueness on recipe_id and legacy rows may have several, so pick
+    // the oldest deterministically rather than minting a new token each time.
+    $existing = db()->prepare('SELECT token FROM shared_recipes WHERE recipe_id = ? ORDER BY created_at ASC, id ASC LIMIT 1');
+    $existing->execute([$m[1]]);
+    $row = $existing->fetch();
+    if ($row) {
+        json_ok(['token' => $row['token']]);
+    }
     $token = bin2hex(random_bytes(12));
     db()->prepare('INSERT INTO shared_recipes (id,recipe_id,user_id,token,message,created_at) VALUES (?,?,?,?,?,?)')
         ->execute([uuid4(), $m[1], $uid, $token, '', gmdate('Y-m-d H:i:s')]);
     json_ok(['token' => $token]);
+}
+if (preg_match('#^/recipes/([a-f0-9-]{36})/share$#', $path, $m) && $method === 'DELETE') {
+    owned_or_404('recipes', $m[1], $uid);
+    db()->prepare('DELETE FROM shared_recipes WHERE recipe_id = ?')->execute([$m[1]]);
+    json_ok(['ok' => true]);
 }
 if (preg_match('#^/recipes/shared/([a-f0-9]+)$#', $path, $m) && $method === 'GET') {
     $stmt = db()->prepare(
@@ -151,7 +172,7 @@ if (preg_match('#^/recipes/([a-f0-9-]{36})$#', $path, $m)) {
     if ($method === 'PATCH') {
         $b = read_json_body();
         if (!empty($b['folder_id'])) owned_or_404('folders', $b['folder_id'], $uid);
-        $scalar = ['title','description','cover_image_url','source_url','source_author','folder_id',
+        $scalar = ['title','description','cover_image_url','cook_image_url','source_url','source_author','folder_id',
                    'prep_time_minutes','cook_time_minutes','total_time_minutes','yield_amount','yield_unit',
                    'notes','is_favorite','last_cooked_at','status'];
         $set = []; $vals = [];
