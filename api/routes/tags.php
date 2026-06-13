@@ -24,8 +24,11 @@ if ($path === '/tags' && $method === 'POST') {
         db()->prepare('INSERT INTO tags (id,user_id,name,color,category,created_at) VALUES (?,?,?,?,?,?)')
             ->execute([$id, $user['id'], $name, $color, $category, $now]);
     } catch (PDOException $e) {
-        // Unique (user_id, name) violation.
-        json_error('A tag with that name already exists', 409);
+        // SQLSTATE 23xxx = integrity violation (here, the UNIQUE(user_id,name)).
+        if (str_starts_with((string) $e->getCode(), '23')) {
+            json_error('A tag with that name already exists', 409);
+        }
+        json_error('Database error', 500);
     }
     $stmt = db()->prepare('SELECT * FROM tags WHERE id = ?');
     $stmt->execute([$id]);
