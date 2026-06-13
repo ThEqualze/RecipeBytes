@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import rbLogo from '../assets/rb-logo-hat.png';
+import rbLogo from '../assets/rb-logo-hat.webp';
 
 export function AuthPage() {
   const { signIn, signUp } = useAuth();

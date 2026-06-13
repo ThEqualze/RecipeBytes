@@ -19,7 +19,7 @@ import {
   Refrigerator,
 } from 'lucide-react';
 import type { Folder as FolderRow, Tag } from '../lib/database.types';
-import rbLogo from '../assets/rb-logo-hat.png';
+import rbLogo from '../assets/rb-logo-hat.webp';
 
 export type ViewKey =
   | { kind: 'library'; filter?: 'all' | 'favorites' | 'recent' }
