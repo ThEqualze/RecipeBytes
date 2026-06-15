@@ -121,10 +121,6 @@ function handle_photo_import(): void {
         json_error('Please upload up to ' . PHOTO_IMPORT_MAX_FILES . ' photos.', 400);
     }
 
-    $cfg = app_config();
-    $key = is_string($cfg['gemini_api_key'] ?? null) ? $cfg['gemini_api_key'] : '';
-    if ($key === '') json_error("Photo import needs AI extraction, which isn't set up.", 422);
-
     $images = [];
     foreach ($files as $f) {
         if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
@@ -144,6 +140,10 @@ function handle_photo_import(): void {
             'tmp' => $tmp,
         ];
     }
+
+    $cfg = app_config();
+    $key = is_string($cfg['gemini_api_key'] ?? null) ? $cfg['gemini_api_key'] : '';
+    if ($key === '') json_error("Photo import needs AI extraction, which isn't set up.", 422);
 
     $model = (is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '')
         ? $cfg['gemini_model'] : 'gemini-2.0-flash';
@@ -183,6 +183,7 @@ function gemini_extract_images(array $images, string $key, string $model, ?strin
         CURLOPT_POSTFIELDS => $payload,
         CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
         CURLOPT_TIMEOUT => 45,
+        CURLOPT_CONNECTTIMEOUT => 6,
         CURLOPT_SSL_VERIFYPEER => true,
     ]);
     $resp = curl_exec($ch);
