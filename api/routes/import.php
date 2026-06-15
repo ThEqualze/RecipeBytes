@@ -12,6 +12,7 @@ $user = require_auth();
 // Photo import: read recipe-card photo(s) with Gemini vision.
 if ($path === '/import/photo' && $method === 'POST') {
     handle_photo_import();
+    exit;
 }
 
 if ($path !== '/import' || $method !== 'POST') {
@@ -127,13 +128,12 @@ function handle_photo_import(): void {
     $images = [];
     foreach ($files as $f) {
         if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            json_error('Upload failed — a photo may be too large.', 400);
+            json_error('Upload failed — the file may be too large.', 400);
         }
         $tmp = (string)($f['tmp_name'] ?? '');
         $check = validate_image_upload($tmp);
         if ($check['error'] !== null) json_error($check['error'], 400);
-        $info = @getimagesize($tmp);
-        $mime = image_mime_from_type(is_array($info) && isset($info[2]) ? (int)$info[2] : -1);
+        $mime = image_mime_from_type((int)$check['type']);
         if ($mime === '') json_error('Unsupported image type. Use JPEG, PNG, WebP, or GIF.', 400);
         $bytes = @file_get_contents($tmp);
         if ($bytes === false) json_error('Could not read an uploaded photo.', 400);
@@ -148,6 +148,7 @@ function handle_photo_import(): void {
     $model = (is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '')
         ? $cfg['gemini_model'] : 'gemini-2.0-flash';
 
+    $gemErr = null;
     $recipe = gemini_extract_images($images, $key, $model, $gemErr);
     if ($recipe === null) {
         // $gemErr set => transport/HTTP problem (502). Null => model found no recipe (422).
@@ -171,6 +172,7 @@ function gemini_extract_images(array $images, string $key, string $model, ?strin
         fn($i) => ['mime' => $i['mime'], 'data_b64' => $i['data_b64']],
         $images
     )));
+    if ($payload === false) { $error = 'Could not prepare the images for extraction.'; return null; }
     $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model)
         . ':generateContent?key=' . rawurlencode($key);
 
@@ -200,7 +202,7 @@ function gemini_extract_images(array $images, string $key, string $model, ?strin
 // Persist a just-uploaded image as a cover and return its public URL, or null on
 // any failure (caller treats null as "no cover", never an import failure).
 function save_cover_from_upload(string $tmpPath, string $ext): ?string {
-    // dirname(__DIR__) is the API root (api/); its parent is the web root.
+    // dirname(__DIR__) is the API root (api/), whose parent is the web root.
     $paths = uploads_paths(app_config(), dirname(__DIR__));
     if (!ensure_uploads_dir($paths['dir'])) return null;
     $name = uuid4() . '.' . $ext;
