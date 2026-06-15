@@ -306,8 +306,8 @@ function map_gemini_recipe(array $g, string $url): array {
 
 // Map a getimagesize() IMAGETYPE_* constant to a MIME type Gemini accepts.
 // Returns '' for unsupported types.
-function image_mime_from_type(int $imageType): string {
-    switch ($imageType) {
+function image_mime_from_type(int $image_type): string {
+    switch ($image_type) {
         case IMAGETYPE_JPEG: return 'image/jpeg';
         case IMAGETYPE_PNG:  return 'image/png';
         case IMAGETYPE_WEBP: return 'image/webp';
@@ -336,7 +336,10 @@ function gemini_image_prompt(): string {
 function build_gemini_image_payload(array $images): array {
     $parts = [['text' => gemini_image_prompt()]];
     foreach ($images as $img) {
-        $parts[] = ['inline_data' => ['mime_type' => $img['mime'], 'data' => $img['data_b64']]];
+        $parts[] = ['inline_data' => [
+            'mime_type' => $img['mime'] ?? '',
+            'data'      => $img['data_b64'] ?? '',
+        ]];
     }
     return [
         'contents' => [['parts' => $parts]],
@@ -346,8 +349,8 @@ function build_gemini_image_payload(array $images): array {
 
 // Parse the model's JSON text into a recipe array, or null when the text is
 // blank, not JSON, or "not a recipe" (empty title AND no ingredients).
-function parse_gemini_recipe_json(string $textOut): ?array {
-    $t = trim($textOut);
+function parse_gemini_recipe_json(string $text): ?array {
+    $t = trim($text);
     if ($t === '') return null;
     $recipe = json_decode($t, true);
     if (!is_array($recipe)) return null;
@@ -375,7 +378,13 @@ function normalize_uploaded_files($f): array {
             ];
         }
     } elseif (($f['tmp_name'] ?? '') !== '') {
-        $out[] = $f;
+        $out[] = [
+            'name'     => $f['name']     ?? '',
+            'type'     => $f['type']     ?? '',
+            'tmp_name' => $f['tmp_name'] ?? '',
+            'error'    => $f['error']    ?? UPLOAD_ERR_NO_FILE,
+            'size'     => $f['size']     ?? 0,
+        ];
     }
     return $out;
 }

@@ -168,6 +168,7 @@ check('parse blank -> null', parse_gemini_recipe_json('   ') === null);
 check('parse non-json -> null', parse_gemini_recipe_json('not json') === null);
 check('parse not-a-recipe -> null', parse_gemini_recipe_json('{"title":""}') === null);
 check('parse title-only is a recipe', is_array(parse_gemini_recipe_json('{"title":"Soup"}')));
+check('parse json array -> null', parse_gemini_recipe_json('[]') === null);
 
 // ---- Photo import: $_FILES normalisation ----
 $multi = ['name'=>['a.jpg','b.png'],'type'=>['image/jpeg','image/png'],
