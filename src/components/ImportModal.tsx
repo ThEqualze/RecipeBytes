@@ -79,19 +79,23 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
 
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return;
-    setError(null);
-    setFiles((prev) => {
-      const next = [...prev];
-      for (const f of Array.from(incoming)) {
-        if (!f.type.startsWith('image/')) { setError('Only image files are supported.'); continue; }
-        if (f.size > MAX_BYTES) { setError('Each photo must be 5 MB or smaller.'); continue; }
-        if (next.some((x) => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) continue;
-        if (next.length >= MAX_FILES) { setError(`You can add up to ${MAX_FILES} photos.`); break; }
-        next.push(f);
-      }
-      return next;
-    });
+    // Snapshot the File objects NOW. The FileList is a live view of the input,
+    // and we clear the input below — so we must read it before the reset (and
+    // before React runs any deferred state update).
+    const picked = Array.from(incoming);
     if (fileInputRef.current) fileInputRef.current.value = ''; // allow re-picking the same file
+
+    const next = [...files];
+    let err: string | null = null;
+    for (const f of picked) {
+      if (!f.type.startsWith('image/')) { err = 'Only image files are supported.'; continue; }
+      if (f.size > MAX_BYTES) { err = 'Each photo must be 5 MB or smaller.'; continue; }
+      if (next.some((x) => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) continue;
+      if (next.length >= MAX_FILES) { err = `You can add up to ${MAX_FILES} photos.`; break; }
+      next.push(f);
+    }
+    setFiles(next);
+    setError(err);
   };
 
   const removeFile = (i: number) => {
