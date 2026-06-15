@@ -142,3 +142,42 @@ check('gemini instructions', count($m['instructions']) === 2 && $m['instructions
 $m2 = map_gemini_recipe([], 'https://x.test');
 check('gemini empty -> default title', $m2['title'] === 'Imported Recipe');
 check('gemini empty -> no ingredients', $m2['ingredients'] === []);
+
+// ---- Photo import: image MIME mapping ----
+check('mime jpeg', image_mime_from_type(IMAGETYPE_JPEG) === 'image/jpeg');
+check('mime png',  image_mime_from_type(IMAGETYPE_PNG)  === 'image/png');
+check('mime webp', image_mime_from_type(IMAGETYPE_WEBP) === 'image/webp');
+check('mime gif',  image_mime_from_type(IMAGETYPE_GIF)  === 'image/gif');
+check('mime unsupported -> empty', image_mime_from_type(IMAGETYPE_BMP) === '');
+
+// ---- Photo import: Gemini image payload ----
+$payload = build_gemini_image_payload([
+    ['mime' => 'image/jpeg', 'data_b64' => 'AAA'],
+    ['mime' => 'image/png',  'data_b64' => 'BBB'],
+]);
+$parts = $payload['contents'][0]['parts'];
+check('payload text part first', isset($parts[0]['text']) && $parts[0]['text'] !== '');
+check('payload inline part per image', isset($parts[1]['inline_data']) && isset($parts[2]['inline_data']));
+check('payload inline mime', $parts[1]['inline_data']['mime_type'] === 'image/jpeg');
+check('payload inline data', $parts[2]['inline_data']['data'] === 'BBB');
+check('payload requests json', $payload['generationConfig']['responseMimeType'] === 'application/json');
+
+// ---- Photo import: model response parsing ----
+check('parse valid recipe', is_array(parse_gemini_recipe_json('{"title":"X","ingredients":[{"name":"a"}]}')));
+check('parse blank -> null', parse_gemini_recipe_json('   ') === null);
+check('parse non-json -> null', parse_gemini_recipe_json('not json') === null);
+check('parse not-a-recipe -> null', parse_gemini_recipe_json('{"title":""}') === null);
+check('parse title-only is a recipe', is_array(parse_gemini_recipe_json('{"title":"Soup"}')));
+check('parse json array -> null', parse_gemini_recipe_json('[]') === null);
+
+// ---- Photo import: $_FILES normalisation ----
+$multi = ['name'=>['a.jpg','b.png'],'type'=>['image/jpeg','image/png'],
+          'tmp_name'=>['/tmp/a','/tmp/b'],'error'=>[0,0],'size'=>[10,20]];
+$norm = normalize_uploaded_files($multi);
+check('normalize multi count', count($norm) === 2);
+check('normalize multi maps tmp', $norm[1]['tmp_name'] === '/tmp/b');
+$single = ['name'=>'a.jpg','type'=>'image/jpeg','tmp_name'=>'/tmp/a','error'=>0,'size'=>10];
+check('normalize single count', count(normalize_uploaded_files($single)) === 1);
+check('normalize null -> empty', normalize_uploaded_files(null) === []);
+$skip = ['name'=>['a','b'],'type'=>['',''],'tmp_name'=>['','/tmp/b'],'error'=>[4,0],'size'=>[0,5]];
+check('normalize skips empty tmp', count(normalize_uploaded_files($skip)) === 1);

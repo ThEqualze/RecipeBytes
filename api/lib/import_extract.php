@@ -301,3 +301,90 @@ function map_gemini_recipe(array $g, string $url): array {
     }
     return $form;
 }
+
+// ---- Photo import: pure helpers (Gemini vision). NO network or DB I/O. ----
+
+// Map a getimagesize() IMAGETYPE_* constant to a MIME type Gemini accepts.
+// Returns '' for unsupported types.
+function image_mime_from_type(int $image_type): string {
+    switch ($image_type) {
+        case IMAGETYPE_JPEG: return 'image/jpeg';
+        case IMAGETYPE_PNG:  return 'image/png';
+        case IMAGETYPE_WEBP: return 'image/webp';
+        case IMAGETYPE_GIF:  return 'image/gif';
+        default:             return '';
+    }
+}
+
+// Instruction text sent to the vision model alongside the card photo(s).
+function gemini_image_prompt(): string {
+    return "You are reading one or more photos of a single printed meal-plan or recipe "
+        . "card (for example a Gousto, HelloFresh, or supermarket recipe card). The photos "
+        . "may show different sides of the same card; combine them into ONE recipe. "
+        . "Respond with ONLY a JSON object (no markdown fences) with keys: "
+        . "title (string), description (string), source_author (string), "
+        . "prep_time_minutes (integer), cook_time_minutes (integer), total_time_minutes (integer), "
+        . "yield_amount (number), yield_unit (string), "
+        . "ingredients (array of objects {quantity, unit, name, prep_note}), "
+        . "instructions (array of objects {content}). "
+        . "Read quantities and steps exactly as printed. "
+        . "If the photos are not a recipe card, return {\"title\":\"\"}.";
+}
+
+// Build the Gemini generateContent request body for image extraction.
+// $images: list of ['mime' => 'image/jpeg', 'data_b64' => '<base64>'].
+function build_gemini_image_payload(array $images): array {
+    $parts = [['text' => gemini_image_prompt()]];
+    foreach ($images as $img) {
+        $parts[] = ['inline_data' => [
+            'mime_type' => $img['mime'] ?? '',
+            'data'      => $img['data_b64'] ?? '',
+        ]];
+    }
+    return [
+        'contents' => [['parts' => $parts]],
+        'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.2],
+    ];
+}
+
+// Parse the model's JSON text into a recipe array, or null when the text is
+// blank, not JSON, or "not a recipe" (empty title AND no ingredients).
+function parse_gemini_recipe_json(string $text): ?array {
+    $t = trim($text);
+    if ($t === '') return null;
+    $recipe = json_decode($t, true);
+    if (!is_array($recipe)) return null;
+    if ((($recipe['title'] ?? '') === '') && empty($recipe['ingredients'])) return null;
+    return $recipe;
+}
+
+// PHP packs a multi-file <input name="files[]"> as parallel arrays. Normalise
+// either that shape or a single-file shape into a list of per-file maps
+// ['name','type','tmp_name','error','size']. Entries with an empty tmp_name are
+// dropped. Returns [] when nothing usable is present.
+function normalize_uploaded_files($f): array {
+    if (!is_array($f) || !isset($f['tmp_name'])) return [];
+    $out = [];
+    if (is_array($f['tmp_name'])) {
+        $n = count($f['tmp_name']);
+        for ($i = 0; $i < $n; $i++) {
+            if (($f['tmp_name'][$i] ?? '') === '') continue;
+            $out[] = [
+                'name'     => $f['name'][$i]     ?? '',
+                'type'     => $f['type'][$i]     ?? '',
+                'tmp_name' => $f['tmp_name'][$i] ?? '',
+                'error'    => $f['error'][$i]    ?? UPLOAD_ERR_NO_FILE,
+                'size'     => $f['size'][$i]     ?? 0,
+            ];
+        }
+    } elseif (($f['tmp_name'] ?? '') !== '') {
+        $out[] = [
+            'name'     => $f['name']     ?? '',
+            'type'     => $f['type']     ?? '',
+            'tmp_name' => $f['tmp_name'] ?? '',
+            'error'    => $f['error']    ?? UPLOAD_ERR_NO_FILE,
+            'size'     => $f['size']     ?? 0,
+        ];
+    }
+    return $out;
+}

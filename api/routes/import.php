@@ -1,10 +1,19 @@
 <?php
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../lib/import_extract.php';
+require_once __DIR__ . '/../lib/uploads.php';
+
+const PHOTO_IMPORT_MAX_FILES = 6;
 
 $path = $GLOBALS['ROUTE_PATH'];
 $method = $GLOBALS['ROUTE_METHOD'];
 $user = require_auth();
+
+// Photo import: read recipe-card photo(s) with Gemini vision.
+if ($path === '/import/photo' && $method === 'POST') {
+    handle_photo_import();
+    exit;
+}
 
 if ($path !== '/import' || $method !== 'POST') {
     json_error('Not found', 404);
@@ -28,7 +37,7 @@ $cfg = app_config();
 $key = is_string($cfg['gemini_api_key'] ?? null) ? $cfg['gemini_api_key'] : '';
 if ($key === '') json_error('We couldn\'t find a recipe on that page.', 422);
 
-$model = is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '' ? $cfg['gemini_model'] : 'gemini-2.0-flash';
+$model = is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '' ? $cfg['gemini_model'] : 'gemini-2.5-flash';
 $form = gemini_extract($html, $url, $key, $model, $gemErr);
 if ($form === null) {
     json_error($gemErr ?? 'We couldn\'t find a recipe on that page.', $gemErr !== null ? 502 : 422);
@@ -101,6 +110,106 @@ function safe_fetch(string $url, ?string &$error = null): ?string {
     }
     $error = 'Too many redirects.';
     return null;
+}
+
+// ---- Photo import (multipart -> Gemini vision -> RecipeFormData) ----
+
+function handle_photo_import(): void {
+    $files = normalize_uploaded_files($_FILES['files'] ?? null);
+    if (count($files) === 0) json_error('No photos were uploaded.', 400);
+    if (count($files) > PHOTO_IMPORT_MAX_FILES) {
+        json_error('Please upload up to ' . PHOTO_IMPORT_MAX_FILES . ' photos.', 400);
+    }
+
+    $images = [];
+    foreach ($files as $f) {
+        if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            json_error('Upload failed — the file may be too large.', 400);
+        }
+        $tmp = (string)($f['tmp_name'] ?? '');
+        $check = validate_image_upload($tmp);
+        if ($check['error'] !== null) json_error($check['error'], 400);
+        $mime = image_mime_from_type((int)$check['type']);
+        if ($mime === '') json_error('Unsupported image type. Use JPEG, PNG, WebP, or GIF.', 400);
+        $bytes = @file_get_contents($tmp);
+        if ($bytes === false) json_error('Could not read an uploaded photo.', 400);
+        $images[] = [
+            'mime' => $mime,
+            'data_b64' => base64_encode($bytes),
+            'ext' => $check['ext'],
+            'tmp' => $tmp,
+        ];
+    }
+
+    $cfg = app_config();
+    $key = is_string($cfg['gemini_api_key'] ?? null) ? $cfg['gemini_api_key'] : '';
+    if ($key === '') json_error("Photo import needs AI extraction, which isn't set up.", 422);
+
+    $model = (is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '')
+        ? $cfg['gemini_model'] : 'gemini-2.5-flash';
+
+    $gemErr = null;
+    $recipe = gemini_extract_images($images, $key, $model, $gemErr);
+    if ($recipe === null) {
+        // $gemErr set => transport/HTTP problem (502). Null => model found no recipe (422).
+        json_error($gemErr ?? "We couldn't find a recipe on that card.", $gemErr !== null ? 502 : 422);
+    }
+
+    $form = map_gemini_recipe($recipe, '');
+
+    // Save the first photo as the cover. Non-fatal: a failure just means no cover.
+    $cover = save_cover_from_upload($images[0]['tmp'], $images[0]['ext']);
+    if ($cover !== null) $form['cover_image_url'] = $cover;
+
+    json_ok($form);
+}
+
+// POST the image payload to Gemini and return the parsed recipe array, or null.
+// On a transport/HTTP error sets $error (caller -> 502). When the model simply
+// returns "not a recipe", returns null with $error left null (caller -> 422).
+function gemini_extract_images(array $images, string $key, string $model, ?string &$error = null): ?array {
+    $payload = json_encode(build_gemini_image_payload(array_map(
+        fn($i) => ['mime' => $i['mime'], 'data_b64' => $i['data_b64']],
+        $images
+    )));
+    if ($payload === false) { $error = 'Could not prepare the images for extraction.'; return null; }
+    $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model)
+        . ':generateContent?key=' . rawurlencode($key);
+
+    $ch = curl_init($endpoint);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT => 45,
+        CURLOPT_CONNECTTIMEOUT => 6,
+        CURLOPT_SSL_VERIFYPEER => true,
+    ]);
+    $resp = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($resp === false || $code >= 400) { $error = 'AI extraction is unavailable right now.'; return null; }
+
+    $data = json_decode($resp, true);
+    $textOut = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+    if (!is_string($textOut) || trim($textOut) === '') {
+        $error = 'AI extraction is unavailable right now.';
+        return null;
+    }
+    return parse_gemini_recipe_json($textOut);
+}
+
+// Persist a just-uploaded image as a cover and return its public URL, or null on
+// any failure (caller treats null as "no cover", never an import failure).
+function save_cover_from_upload(string $tmpPath, string $ext): ?string {
+    // dirname(__DIR__) is the API root (api/), whose parent is the web root.
+    $paths = uploads_paths(app_config(), dirname(__DIR__));
+    if (!ensure_uploads_dir($paths['dir'])) return null;
+    $name = uuid4() . '.' . $ext;
+    $dest = $paths['dir'] . '/' . $name;
+    if (!move_uploaded_file($tmpPath, $dest)) return null;
+    return $paths['base_url'] . '/' . $name;
 }
 
 function gemini_extract(string $html, string $url, string $key, string $model, ?string &$error = null): ?array {

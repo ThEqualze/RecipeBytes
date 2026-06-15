@@ -15,25 +15,27 @@ function upload_allowed_types(): array {
 
 // Validate a just-uploaded image by size and by sniffing the real bytes.
 // Size is measured from the file on disk (never trust a caller-supplied size).
-// Returns ['ext' => 'jpg', 'error' => null] on success,
-// or ['ext' => null, 'error' => '<reason>'] on failure.
+// Returns ['ext' => 'jpg', 'type' => IMAGETYPE_JPEG, 'error' => null] on success,
+// or ['ext' => null, 'type' => null, 'error' => '<reason>'] on failure.
+// The 'type' key carries the IMAGETYPE_* integer from getimagesize so callers
+// never need to call getimagesize a second time.
 function validate_image_upload(string $tmpPath): array {
     $size = @filesize($tmpPath);
     if ($size === false || $size <= 0) {
-        return ['ext' => null, 'error' => 'The file is empty.'];
+        return ['ext' => null, 'type' => null, 'error' => 'The file is empty.'];
     }
     if ($size > UPLOAD_MAX_BYTES) {
-        return ['ext' => null, 'error' => 'Image must be 5 MB or smaller.'];
+        return ['ext' => null, 'type' => null, 'error' => 'Image must be 5 MB or smaller.'];
     }
     $info = @getimagesize($tmpPath);
     if ($info === false || !isset($info[2])) {
-        return ['ext' => null, 'error' => 'That file is not a valid image.'];
+        return ['ext' => null, 'type' => null, 'error' => 'That file is not a valid image.'];
     }
     $allowed = upload_allowed_types();
     if (!isset($allowed[$info[2]])) {
-        return ['ext' => null, 'error' => 'Unsupported image type. Use JPEG, PNG, WebP, or GIF.'];
+        return ['ext' => null, 'type' => null, 'error' => 'Unsupported image type. Use JPEG, PNG, WebP, or GIF.'];
     }
-    return ['ext' => $allowed[$info[2]], 'error' => null];
+    return ['ext' => $allowed[$info[2]], 'type' => $info[2], 'error' => null];
 }
 
 // Resolve the filesystem dir and public URL base for cover uploads.
