@@ -12,7 +12,9 @@ return [
     // Set true in production (HTTPS) so the cookie is Secure
     'cookie_secure' => false,
     // Google AI Studio (Gemini) — server-side only. Leave key empty to disable
-    // the AI fallback (JSON-LD-only import still works).
+    // the AI fallback for URL import (JSON-LD-only import still works). A key is
+    // REQUIRED for photo/recipe-card import (POST /import/photo), which has no
+    // free fallback because reading a photo needs the vision model.
     'gemini_api_key' => '',
     'gemini_model'   => 'gemini-2.0-flash',
     // --- Cover image uploads ---------------------------------------------
