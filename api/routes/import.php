@@ -37,7 +37,7 @@ $cfg = app_config();
 $key = is_string($cfg['gemini_api_key'] ?? null) ? $cfg['gemini_api_key'] : '';
 if ($key === '') json_error('We couldn\'t find a recipe on that page.', 422);
 
-$model = is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '' ? $cfg['gemini_model'] : 'gemini-2.0-flash';
+$model = is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '' ? $cfg['gemini_model'] : 'gemini-2.5-flash';
 $form = gemini_extract($html, $url, $key, $model, $gemErr);
 if ($form === null) {
     json_error($gemErr ?? 'We couldn\'t find a recipe on that page.', $gemErr !== null ? 502 : 422);
@@ -146,7 +146,7 @@ function handle_photo_import(): void {
     if ($key === '') json_error("Photo import needs AI extraction, which isn't set up.", 422);
 
     $model = (is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '')
-        ? $cfg['gemini_model'] : 'gemini-2.0-flash';
+        ? $cfg['gemini_model'] : 'gemini-2.5-flash';
 
     $gemErr = null;
     $recipe = gemini_extract_images($images, $key, $model, $gemErr);
