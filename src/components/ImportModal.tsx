@@ -21,21 +21,34 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
   const [mode, setMode] = useState<Mode>('link');
   const [url, setUrl] = useState('');
   const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Build object URLs for thumbnails; revoke them when the list changes/unmounts.
+  // One object URL per File, cached so thumbnails stay stable across renders
+  // (no flash) and are revoked exactly once. The cache is cleared on remove,
+  // on reset, and on unmount.
+  const urlCache = useRef(new Map<File, string>());
   useEffect(() => {
-    const urls = files.map((f) => URL.createObjectURL(f));
-    setPreviews(urls);
-    return () => urls.forEach((u) => URL.revokeObjectURL(u));
-  }, [files]);
+    const cache = urlCache.current;
+    return () => { cache.forEach((u) => URL.revokeObjectURL(u)); cache.clear(); };
+  }, []);
 
   if (!open) return null;
 
+  const previewFor = (f: File): string => {
+    let u = urlCache.current.get(f);
+    if (!u) { u = URL.createObjectURL(f); urlCache.current.set(f, u); }
+    return u;
+  };
+
+  const clearUrlCache = () => {
+    urlCache.current.forEach((u) => URL.revokeObjectURL(u));
+    urlCache.current.clear();
+  };
+
   const reset = () => {
+    clearUrlCache();
     setUrl('');
     setFiles([]);
     setError(null);
@@ -44,7 +57,11 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
 
   const close = () => { reset(); setMode('link'); onClose(); };
 
-  const switchMode = (m: Mode) => { setMode(m); setError(null); };
+  const switchMode = (m: Mode) => {
+    if (busy) return;
+    setMode(m);
+    setError(null);
+  };
 
   const submitLink = async () => {
     if (!url || busy) return;
@@ -63,19 +80,26 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return;
     setError(null);
-    const next = [...files];
-    for (const f of Array.from(incoming)) {
-      if (!f.type.startsWith('image/')) { setError('Only image files are supported.'); continue; }
-      if (f.size > MAX_BYTES) { setError('Each photo must be 5 MB or smaller.'); continue; }
-      if (next.some((x) => x.name === f.name && x.size === f.size)) continue; // de-dupe
-      if (next.length >= MAX_FILES) { setError(`You can add up to ${MAX_FILES} photos.`); break; }
-      next.push(f);
-    }
-    setFiles(next);
+    setFiles((prev) => {
+      const next = [...prev];
+      for (const f of Array.from(incoming)) {
+        if (!f.type.startsWith('image/')) { setError('Only image files are supported.'); continue; }
+        if (f.size > MAX_BYTES) { setError('Each photo must be 5 MB or smaller.'); continue; }
+        if (next.some((x) => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) continue;
+        if (next.length >= MAX_FILES) { setError(`You can add up to ${MAX_FILES} photos.`); break; }
+        next.push(f);
+      }
+      return next;
+    });
     if (fileInputRef.current) fileInputRef.current.value = ''; // allow re-picking the same file
   };
 
-  const removeFile = (i: number) => setFiles(files.filter((_, idx) => idx !== i));
+  const removeFile = (i: number) => {
+    const f = files[i];
+    const u = urlCache.current.get(f);
+    if (u) { URL.revokeObjectURL(u); urlCache.current.delete(f); }
+    setFiles(files.filter((_, idx) => idx !== i));
+  };
 
   const submitPhotos = async () => {
     if (files.length === 0 || busy) return;
@@ -94,7 +118,7 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
   };
 
   const tabClass = (m: Mode) =>
-    `flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg transition-colors ${
+    `flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-lg transition-colors disabled:cursor-not-allowed ${
       mode === m ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
     }`;
 
@@ -108,7 +132,9 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <button
+          type="button"
           onClick={close}
+          aria-label="Close"
           className="absolute top-4 right-4 w-8 h-8 rounded-md hover:bg-stone-100 flex items-center justify-center text-stone-500"
         >
           <X className="w-4 h-4" />
@@ -120,10 +146,10 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
         </div>
 
         <div className="flex items-center gap-1.5 p-1 bg-stone-100 rounded-xl mb-5">
-          <button onClick={() => switchMode('link')} className={tabClass('link')}>
+          <button type="button" onClick={() => switchMode('link')} disabled={busy} className={tabClass('link')}>
             <Link2 className="w-3.5 h-3.5" /> From link
           </button>
-          <button onClick={() => switchMode('photo')} className={tabClass('photo')}>
+          <button type="button" onClick={() => switchMode('photo')} disabled={busy} className={tabClass('photo')}>
             <Camera className="w-3.5 h-3.5" /> From photo
           </button>
         </div>
@@ -165,12 +191,14 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={close}
                 className="px-4 py-2 text-[13px] font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={submitLink}
                 disabled={!url || busy}
                 className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-[13px] font-medium rounded-lg transition-colors"
@@ -201,10 +229,14 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
 
             {files.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mb-3">
-                {previews.map((src, i) => (
-                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200 bg-stone-50">
-                    <img src={src} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                {files.map((file, i) => (
+                  <div
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    className="relative aspect-square rounded-lg overflow-hidden border border-stone-200 bg-stone-50"
+                  >
+                    <img src={previewFor(file)} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                     <button
+                      type="button"
                       onClick={() => removeFile(i)}
                       className="absolute top-1 right-1 w-6 h-6 rounded-md bg-stone-900/70 hover:bg-stone-900 text-white flex items-center justify-center"
                       aria-label="Remove photo"
@@ -223,6 +255,7 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
 
             {files.length < MAX_FILES && (
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full flex flex-col items-center justify-center gap-2 px-4 py-6 mb-3 border-2 border-dashed border-stone-200 hover:border-stone-300 hover:bg-stone-50 rounded-xl text-stone-500 transition-colors"
               >
@@ -242,12 +275,14 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={close}
                 className="px-4 py-2 text-[13px] font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={submitPhotos}
                 disabled={files.length === 0 || busy}
                 className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-[13px] font-medium rounded-lg transition-colors"
