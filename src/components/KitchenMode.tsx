@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { Recipe, Ingredient, Instruction } from '../lib/database.types';
 import { formatQuantity } from '../lib/format';
+import rbLogo from '../assets/rb-logo-hat.webp';
 
 interface KitchenModeProps {
   recipe: Recipe;
@@ -140,7 +141,11 @@ export function KitchenMode({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 mr-1">
+            <img src={rbLogo} alt="RecipeBytes" className="w-6 h-6 object-contain shrink-0" />
+            <span className="font-display text-[14px] font-semibold text-stone-100">RecipeBytes</span>
+          </div>
           <button
             onClick={() => setShowIngredients(!showIngredients)}
             className={`px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
