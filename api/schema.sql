@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
   id            CHAR(36)     NOT NULL,
   email         VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
+  is_admin      TINYINT(1)   NOT NULL DEFAULT 0,
+  suspended_at  DATETIME     NULL DEFAULT NULL,
   created_at    DATETIME     NOT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY users_email_unique (email)
@@ -12,10 +14,11 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- sessions ---------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sessions (
-  token      CHAR(64)  NOT NULL,
-  user_id    CHAR(36)  NOT NULL,
-  created_at DATETIME  NOT NULL,
-  expires_at DATETIME  NOT NULL,
+  token           CHAR(64)  NOT NULL,
+  user_id         CHAR(36)  NOT NULL,
+  impersonated_by CHAR(36)  NULL DEFAULT NULL,
+  created_at      DATETIME  NOT NULL,
+  expires_at      DATETIME  NOT NULL,
   PRIMARY KEY (token),
   KEY sessions_user_id_idx (user_id),
   CONSTRAINT sessions_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -200,9 +203,12 @@ CREATE TABLE IF NOT EXISTS shared_recipes (
   id         CHAR(36)     NOT NULL,
   recipe_id  CHAR(36)     NOT NULL,
   user_id    CHAR(36)     NOT NULL,
-  token      VARCHAR(64)  NOT NULL,
-  message    VARCHAR(512) NOT NULL DEFAULT '',
-  created_at DATETIME     NOT NULL,
+  token         VARCHAR(64)  NOT NULL,
+  message       VARCHAR(512) NOT NULL DEFAULT '',
+  is_active     TINYINT(1)   NOT NULL DEFAULT 1,
+  revoked_at    DATETIME     NULL DEFAULT NULL,
+  flagged_count INT          NOT NULL DEFAULT 0,
+  created_at    DATETIME     NOT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY shared_recipes_token_unique (token),
   KEY shared_recipes_user_id_idx (user_id),
@@ -258,5 +264,105 @@ CREATE TABLE IF NOT EXISTS collection_recipes (
   CONSTRAINT cr_collection_fk FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
   CONSTRAINT cr_recipe_fk FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- Admin area (Phase 1). max_* columns: NULL = unlimited, integer = monthly cap.
+-- ===========================================================================
+
+-- subscription_tiers -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS subscription_tiers (
+  id                    CHAR(36)      NOT NULL,
+  tier_name             VARCHAR(64)   NOT NULL,
+  monthly_cost          DECIMAL(10,2) NOT NULL DEFAULT 0,
+  max_recipes           INT           NULL DEFAULT NULL,
+  max_url_imports       INT           NULL DEFAULT NULL,
+  max_image_scans       INT           NULL DEFAULT NULL,
+  multi_device_enabled  TINYINT(1)    NOT NULL DEFAULT 1,
+  kitchen_mode_enabled  TINYINT(1)    NOT NULL DEFAULT 1,
+  planner_enabled       TINYINT(1)    NOT NULL DEFAULT 1,
+  shopping_list_enabled TINYINT(1)    NOT NULL DEFAULT 1,
+  pantry_match_enabled  TINYINT(1)    NOT NULL DEFAULT 1,
+  is_default            TINYINT(1)    NOT NULL DEFAULT 0,
+  position              INT           NOT NULL DEFAULT 0,
+  created_at            DATETIME      NOT NULL,
+  updated_at            DATETIME      NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY subscription_tiers_name_unique (tier_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- user_subscriptions -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  id                   CHAR(36)     NOT NULL,
+  user_id              CHAR(36)     NOT NULL,
+  tier_id              CHAR(36)     NOT NULL,
+  status               VARCHAR(32)  NOT NULL DEFAULT 'active',
+  current_period_start DATETIME     NULL DEFAULT NULL,
+  current_period_end   DATETIME     NULL DEFAULT NULL,
+  stripe_customer_id   VARCHAR(255) NULL DEFAULT NULL,
+  created_at           DATETIME     NOT NULL,
+  updated_at           DATETIME     NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY user_subscriptions_user_unique (user_id),
+  KEY user_subscriptions_tier_idx (tier_id),
+  CONSTRAINT user_subscriptions_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT user_subscriptions_tier_fk FOREIGN KEY (tier_id) REFERENCES subscription_tiers(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- usage_ledger -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS usage_ledger (
+  id                CHAR(36) NOT NULL,
+  user_id           CHAR(36) NOT NULL,
+  period_start      DATE     NOT NULL,
+  url_imports_count INT      NOT NULL DEFAULT 0,
+  image_scans_count INT      NOT NULL DEFAULT 0,
+  reset_date        DATE     NOT NULL,
+  created_at        DATETIME NOT NULL,
+  updated_at        DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY usage_ledger_user_period_unique (user_id, period_start),
+  CONSTRAINT usage_ledger_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ai_job_logs ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ai_job_logs (
+  id            CHAR(36)      NOT NULL,
+  user_id       CHAR(36)      NULL,
+  job_type      VARCHAR(16)   NOT NULL,
+  status        VARCHAR(16)   NOT NULL,
+  tokens_used   INT           NOT NULL DEFAULT 0,
+  cost          DECIMAL(12,6) NOT NULL DEFAULT 0,
+  model         VARCHAR(64)   NOT NULL DEFAULT '',
+  error_message TEXT          NULL,
+  created_at    DATETIME      NOT NULL,
+  PRIMARY KEY (id),
+  KEY ai_job_logs_user_idx (user_id),
+  KEY ai_job_logs_created_idx (created_at),
+  CONSTRAINT ai_job_logs_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- admin_audit_log (no FK: also logs non-admin attempts; survives user deletion) --
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id            CHAR(36)    NOT NULL,
+  admin_user_id CHAR(36)    NULL,
+  action        VARCHAR(64) NOT NULL,
+  target_type   VARCHAR(64) NULL,
+  target_id     VARCHAR(64) NULL,
+  detail        TEXT        NULL,
+  ip            VARCHAR(64) NULL,
+  created_at    DATETIME    NOT NULL,
+  PRIMARY KEY (id),
+  KEY admin_audit_log_admin_idx (admin_user_id),
+  KEY admin_audit_log_action_idx (action),
+  KEY admin_audit_log_created_idx (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- seed default tiers -----------------------------------------------------
+INSERT IGNORE INTO subscription_tiers
+  (id, tier_name, monthly_cost, max_recipes, max_url_imports, max_image_scans,
+   multi_device_enabled, kitchen_mode_enabled, planner_enabled, shopping_list_enabled,
+   pantry_match_enabled, is_default, position, created_at, updated_at)
+VALUES
+  (UUID(), 'Free', 0.00,   25,   10,    5, 0, 1, 1, 1, 0, 1, 0, UTC_TIMESTAMP(), UTC_TIMESTAMP()),
+  (UUID(), 'Pro',  4.99, NULL, NULL, NULL, 1, 1, 1, 1, 1, 0, 1, UTC_TIMESTAMP(), UTC_TIMESTAMP());
 
 SET FOREIGN_KEY_CHECKS = 1;
