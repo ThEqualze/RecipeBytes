@@ -133,12 +133,7 @@ function handle_photo_import(): void {
         if ($mime === '') json_error('Unsupported image type. Use JPEG, PNG, WebP, or GIF.', 400);
         $bytes = @file_get_contents($tmp);
         if ($bytes === false) json_error('Could not read an uploaded photo.', 400);
-        $images[] = [
-            'mime' => $mime,
-            'data_b64' => base64_encode($bytes),
-            'ext' => $check['ext'],
-            'tmp' => $tmp,
-        ];
+        $images[] = ['mime' => $mime, 'data_b64' => base64_encode($bytes)];
     }
 
     $cfg = app_config();
@@ -155,12 +150,10 @@ function handle_photo_import(): void {
         json_error($gemErr ?? "We couldn't find a recipe on that card.", $gemErr !== null ? 502 : 422);
     }
 
+    // The card photo is not used as the cover — a snapshot of a card makes a poor
+    // cover image. cover_image_url is left empty; the user adds their own cover in
+    // the editor (the editor's cover-upload button stays available).
     $form = map_gemini_recipe($recipe, '');
-
-    // Save the first photo as the cover. Non-fatal: a failure just means no cover.
-    $cover = save_cover_from_upload($images[0]['tmp'], $images[0]['ext']);
-    if ($cover !== null) $form['cover_image_url'] = $cover;
-
     json_ok($form);
 }
 
@@ -198,18 +191,6 @@ function gemini_extract_images(array $images, string $key, string $model, ?strin
         return null;
     }
     return parse_gemini_recipe_json($textOut);
-}
-
-// Persist a just-uploaded image as a cover and return its public URL, or null on
-// any failure (caller treats null as "no cover", never an import failure).
-function save_cover_from_upload(string $tmpPath, string $ext): ?string {
-    // dirname(__DIR__) is the API root (api/), whose parent is the web root.
-    $paths = uploads_paths(app_config(), dirname(__DIR__));
-    if (!ensure_uploads_dir($paths['dir'])) return null;
-    $name = uuid4() . '.' . $ext;
-    $dest = $paths['dir'] . '/' . $name;
-    if (!move_uploaded_file($tmpPath, $dest)) return null;
-    return $paths['base_url'] . '/' . $name;
 }
 
 function gemini_extract(string $html, string $url, string $key, string $model, ?string &$error = null): ?array {
