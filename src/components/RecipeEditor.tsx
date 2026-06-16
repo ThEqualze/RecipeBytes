@@ -11,6 +11,7 @@ import {
   Upload,
   Loader2,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import type { Recipe, Ingredient, Instruction, Folder, Tag } from '../lib/database.types';
@@ -60,6 +61,7 @@ interface RecipeEditorProps {
   onSave: (data: RecipeFormData) => Promise<void>;
   onDelete?: () => void;
   onCancel: () => void;
+  onImport?: () => void;
 }
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -83,6 +85,7 @@ export function RecipeEditor({
   onSave,
   onDelete,
   onCancel,
+  onImport,
 }: RecipeEditorProps) {
   const seed = mode === 'create' ? initialForm : undefined;
   const [saving, setSaving] = useState(false);
@@ -218,6 +221,16 @@ export function RecipeEditor({
           Cancel
         </button>
         <div className="flex items-center gap-2">
+          {mode === 'create' && onImport && (
+            <button
+              onClick={onImport}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-accent-700 bg-accent-50 hover:bg-accent-100 rounded-lg transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="sm:hidden">Import</span>
+              <span className="hidden sm:inline">Import from link or image</span>
+            </button>
+          )}
           {mode === 'edit' && onDelete && (
             <button
               onClick={() => {

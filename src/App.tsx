@@ -89,6 +89,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<'create' | 'edit' | null>(null);
   const [importedForm, setImportedForm] = useState<RecipeFormData | null>(null);
+  const [importSeq, setImportSeq] = useState(0);
   const [search, setSearch] = useState('');
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [importOpen, setImportOpen] = useState(false);
@@ -109,6 +110,14 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
   const { ingredients } = useRecipeIngredients(activeRecipeId);
   const { instructions } = useRecipeInstructions(activeRecipeId);
   const { createRecipe, updateRecipe, deleteRecipe, duplicateRecipe } = useRecipeCrud(userId);
+
+  // Start a fresh blank recipe: clear any imported seed and remount the editor.
+  const startNewRecipe = () => {
+    setImportedForm(null);
+    setImportSeq((s) => s + 1);
+    setActiveRecipeId(null);
+    setEditorMode('create');
+  };
 
   useEffect(() => {
     setReady(true);
@@ -296,8 +305,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
             setSidebarOpen(false);
           }}
           onNewRecipe={() => {
-            setEditorMode('create');
-            setActiveRecipeId(null);
+            startNewRecipe();
             setSidebarOpen(false);
           }}
           userEmail={userEmail}
@@ -309,10 +317,12 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
       <main className="flex-1 min-w-0 bg-white pt-[57px] md:pt-0">
         {editorMode === 'create' ? (
           <RecipeEditor
+            key={`create-${importSeq}`}
             mode="create"
             initialForm={importedForm ?? undefined}
             folders={folders}
             tags={tags}
+            onImport={() => setImportOpen(true)}
             onSave={async (data: RecipeFormData) => {
               const id = await createRecipe(data);
               setEditorMode(null);
@@ -452,7 +462,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
             onViewChange={setLayout}
             onSelectRecipe={setActiveRecipeId}
             onToggleFavorite={toggleFavorite}
-            onNewRecipe={() => setEditorMode('create')}
+            onNewRecipe={startNewRecipe}
             onTagClick={(tagId) => setView({ kind: 'tag', tagId })}
           />
         )}
@@ -463,6 +473,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
         onClose={() => setImportOpen(false)}
         onImported={(data) => {
           setImportedForm(data);
+          setImportSeq((s) => s + 1);
           setImportOpen(false);
           setEditorMode('create');
         }}
