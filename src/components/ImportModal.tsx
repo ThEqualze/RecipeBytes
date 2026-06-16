@@ -247,11 +247,6 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
-                    {i === 0 && (
-                      <span className="absolute bottom-1 left-1 text-[10px] font-medium text-white bg-stone-900/70 rounded px-1.5 py-0.5">
-                        Cover
-                      </span>
-                    )}
                   </div>
                 ))}
               </div>
@@ -314,7 +309,7 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
               <>
                 <li>Take or upload photo(s) of the card</li>
                 <li>AI reads the title, ingredients and steps</li>
-                <li>Open it pre-filled in the editor (first photo becomes the cover)</li>
+                <li>Open it pre-filled in the editor</li>
                 <li>Review and save to your library</li>
               </>
             )}
