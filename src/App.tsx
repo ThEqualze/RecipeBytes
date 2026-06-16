@@ -29,7 +29,8 @@ import {
   useCollectionRecipes,
 } from './hooks/useData';
 import { api } from './lib/api';
-import { Loader2, Menu, ChefHat } from 'lucide-react';
+import { Loader2, Menu } from 'lucide-react';
+import rbLogo from './assets/rb-logo-hat.webp';
 
 function descendantFolderIds(
   rootId: string,
@@ -254,10 +255,8 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
           <Menu className="w-5 h-5 text-stone-700" />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-stone-900 text-stone-50 flex items-center justify-center">
-            <ChefHat className="w-4 h-4" strokeWidth={2} />
-          </div>
-          <span className="font-display text-[15px] font-semibold text-stone-900">Mise</span>
+          <img src={rbLogo} alt="RecipeBytes" className="w-7 h-7 object-contain shrink-0" />
+          <span className="font-display text-[15px] font-semibold text-stone-900">RecipeBytes</span>
         </div>
         <div className="w-9" />
       </div>

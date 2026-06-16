@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock, Users, Lock, ChefHat, UserPlus } from 'lucide-react';
 import { api } from '../lib/api';
+import rbLogo from '../assets/rb-logo-hat.webp';
 import type { Recipe, Ingredient, Tag } from '../lib/database.types';
 import { formatTime } from '../lib/format';
 
@@ -74,6 +75,12 @@ export function PublicRecipeView({ token, onSignUp }: PublicRecipeViewProps) {
 
   return (
     <div className="min-h-screen bg-stone-50">
+      {/* Brand header */}
+      <header className="flex items-center gap-2 px-6 sm:px-10 py-4">
+        <img src={rbLogo} alt="RecipeBytes" className="w-8 h-8 object-contain shrink-0" />
+        <span className="font-display text-[16px] font-semibold text-stone-900">RecipeBytes</span>
+      </header>
+
       {/* Hero */}
       <div className="relative">
         {heroImage ? (
