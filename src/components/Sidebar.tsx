@@ -171,7 +171,7 @@ export function Sidebar({
           className="w-full flex items-center gap-2 px-2 py-1.5 text-[13px] text-accent-700 bg-accent-50 hover:bg-accent-100 rounded-md font-medium transition-colors"
         >
           <Sparkles className="w-[14px] h-[14px]" />
-          Import from link
+          Import from link or image
         </button>
         <button
           onClick={onNewRecipe}
