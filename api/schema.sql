@@ -356,6 +356,21 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
   KEY admin_audit_log_created_idx (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- content_reports (external reports against public recipe links) ---------
+CREATE TABLE IF NOT EXISTS content_reports (
+  id               CHAR(36)     NOT NULL,
+  shared_recipe_id CHAR(36)     NULL,
+  token            VARCHAR(64)  NULL,
+  reason           VARCHAR(512) NOT NULL DEFAULT '',
+  reporter_ip      VARCHAR(64)  NULL,
+  status           VARCHAR(16)  NOT NULL DEFAULT 'open',
+  created_at       DATETIME     NOT NULL,
+  resolved_at      DATETIME     NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY content_reports_status_idx (status),
+  KEY content_reports_share_idx (shared_recipe_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- system_settings (global key/value, e.g. the active AI model) -----------
 CREATE TABLE IF NOT EXISTS system_settings (
   setting_key   VARCHAR(64) NOT NULL,
