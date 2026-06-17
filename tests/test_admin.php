@@ -100,3 +100,47 @@ check('usage counter reset to 0', $cnt === 0);
 // Admin actions are audited
 $acts = (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log WHERE action IN ('suspend_user','override_subscription','reset_usage')")->fetchColumn();
 check('admin actions are audited', $acts >= 3);
+
+// ===== Phase 2b: Impersonation ("Login As") =====
+// NOTE: a successful impersonate swaps the active session cookie, so run last.
+
+// Cannot impersonate yourself.
+check('cannot impersonate self -> 400', api('POST', '/admin/users/' . $adminId . '/impersonate', [])['status'] === 400);
+
+// Cannot impersonate another admin.
+$cEmail = 'cadmin_' . bin2hex(random_bytes(4)) . '@example.com';
+$apdo->prepare('INSERT INTO users (id, email, password_hash, is_admin, created_at) VALUES (UUID(), ?, ?, 1, UTC_TIMESTAMP())')
+     ->execute([$cEmail, 'x']);
+$cId = $apdo->query("SELECT id FROM users WHERE email = " . $apdo->quote($cEmail))->fetchColumn();
+check('cannot impersonate an admin -> 400', api('POST', '/admin/users/' . $cId . '/impersonate', [])['status'] === 400);
+
+// Suspended login is blocked (suspend feature has teeth).
+$apdo->prepare("UPDATE users SET password_hash = ? WHERE email = ?")
+     ->execute([password_hash('secret123', PASSWORD_BCRYPT), $btarget]);
+$apdo->prepare('UPDATE users SET suspended_at = UTC_TIMESTAMP() WHERE email = ?')->execute([$btarget]);
+$sl = api('POST', '/auth/login', ['email' => $btarget, 'password' => 'secret123']);
+check('suspended user cannot log in -> 403', $sl['status'] === 403);
+$apdo->prepare('UPDATE users SET suspended_at = NULL WHERE email = ?')->execute([$btarget]);
+// (api() shares one cookie jar; the failed login above left it unchanged — still the admin session.)
+
+// Start impersonation of the (non-admin) target -> 200; session cookie becomes the target.
+$imp = api('POST', '/admin/users/' . $bId . '/impersonate', []);
+check('impersonate target -> 200', $imp['status'] === 200);
+check('impersonate returns redirect', ($imp['json']['data']['redirect'] ?? '') === '/');
+
+// Now acting AS the target: session reflects impersonation.
+$sess = api('GET', '/auth/session');
+check('session is the impersonated target', ($sess['json']['data']['email'] ?? '') === $btarget);
+check('session flagged impersonating', ($sess['json']['data']['impersonating'] ?? false) === true);
+
+// While impersonating, admin tooling is blocked (404, non-disclosure).
+check('impersonation cannot reach admin -> 404', api('GET', '/admin/overview')['status'] === 404);
+
+// Exit impersonation -> restores the admin session.
+$exit = api('POST', '/auth/exit-impersonation');
+check('exit impersonation -> 200', $exit['status'] === 200);
+check('admin restored after exit', api('GET', '/admin/overview')['status'] === 200);
+
+// Both ends of impersonation are audited.
+$impAudit = (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log WHERE action IN ('impersonate_start','impersonate_end')")->fetchColumn();
+check('impersonation start+end audited', $impAudit >= 2);

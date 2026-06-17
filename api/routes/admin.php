@@ -220,6 +220,17 @@ if (($seg[1] ?? '') === 'users' && isset($seg[2]) && $seg[2] !== '') {
         json_ok(['tier_id' => $tierId, 'status' => $status, 'current_period_end' => $periodEnd]);
     }
 
+    // POST /admin/users/{id}/impersonate — start a "Login As" session for support.
+    if ($action === 'impersonate' && $method === 'POST') {
+        if ($userId === $admin['id']) json_error('You cannot impersonate yourself.', 400);
+        if ((int)$target['is_admin'] === 1) json_error('You cannot impersonate another admin.', 400);
+        $adminToken = $_COOKIE[SESSION_COOKIE] ?? '';
+        if ($adminToken === '') json_error('Session error.', 400);
+        start_impersonation_session($userId, $adminToken, $admin['id']);
+        admin_audit($admin['id'], 'impersonate_start', 'user', $userId, ['email' => $target['email']]);
+        json_ok(['redirect' => '/']);
+    }
+
     // POST /admin/users/{id}/usage-reset — reset current month's counters to 0
     if ($action === 'usage-reset' && $method === 'POST') {
         get_or_create_usage($userId);

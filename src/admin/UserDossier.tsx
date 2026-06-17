@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
-import { ArrowLeft, Loader2, ShieldCheck, Ban, RotateCcw, Gift } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldCheck, Ban, RotateCcw, Gift, LogIn } from 'lucide-react';
 
 interface Dossier {
   user: { id: string; email: string; display_name: string; is_admin: boolean; suspended: boolean; suspended_at: string | null; created_at: string };
@@ -35,6 +35,17 @@ export function UserDossier({ id, onBack }: { id: string; onBack: () => void }) 
     try { await fn(); load(); }
     catch (e) { setErr(e instanceof ApiError ? e.message : 'Action failed.'); }
     finally { setBusy(false); }
+  };
+
+  const impersonate = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.post<{ redirect: string }>(`/admin/users/${id}/impersonate`, {});
+      window.location.href = r.redirect || '/';
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : 'Could not start impersonation.');
+      setBusy(false);
+    }
   };
 
   if (err && !d) return <div className="p-8 text-stone-500">{err}</div>;
@@ -122,6 +133,22 @@ export function UserDossier({ id, onBack }: { id: string; onBack: () => void }) 
         <div className="text-[13px] text-stone-700">AI jobs: {d.stats.ai_jobs.length === 0 ? <span className="text-stone-400">none</span> : d.stats.ai_jobs.map((j, i) => <span key={i} className="mr-3">{j.job_type}/{j.status}: <span className="font-semibold">{j.count}</span></span>)}</div>
       </div>
 
+      {/* Support */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4 mb-6">
+        <div className="text-[11px] uppercase tracking-wider font-semibold text-stone-500 mb-2">Support</div>
+        <button
+          disabled={busy || u.is_admin}
+          onClick={impersonate}
+          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent-700 bg-accent-50 hover:bg-accent-100 disabled:opacity-50 rounded-lg px-3 py-1.5"
+        >
+          <LogIn className="w-3.5 h-3.5" /> Log in as this user
+        </button>
+        <p className="text-[12px] text-stone-500 mt-2">
+          Opens the app as this user in a time-limited support session (no password needed); a banner lets you exit back to admin.
+          {u.is_admin && ' Admins cannot be impersonated.'}
+        </p>
+      </div>
+
       <div className="border border-rose-200 bg-rose-50/40 rounded-xl p-4">
         <div className="text-[11px] uppercase tracking-wider font-semibold text-rose-600 mb-2">Account actions</div>
         {u.suspended ? (
@@ -135,7 +162,7 @@ export function UserDossier({ id, onBack }: { id: string; onBack: () => void }) 
             <Ban className="w-3.5 h-3.5" /> Suspend / ban user
           </button>
         )}
-        <p className="text-[12px] text-stone-500 mt-2">Suspending immediately signs the user out of all devices. Password reset & impersonation arrive in Phase 2b/2c.</p>
+        <p className="text-[12px] text-stone-500 mt-2">Suspending immediately signs the user out of all devices and blocks login. Password reset arrives in Phase 2c.</p>
       </div>
     </div>
   );

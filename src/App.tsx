@@ -84,7 +84,7 @@ function App() {
 }
 
 function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId: string; userEmail?: string; shareToken: string | null; clearShareToken: () => void }) {
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const [view, setView] = useState<ViewKey>({ kind: 'library', filter: 'all' });
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<'create' | 'edit' | null>(null);
@@ -117,6 +117,11 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
     setImportSeq((s) => s + 1);
     setActiveRecipeId(null);
     setEditorMode('create');
+  };
+
+  const exitImpersonation = async () => {
+    try { await api.post('/auth/exit-impersonation'); } catch { /* ignore */ }
+    window.location.href = '/admin';
   };
 
   useEffect(() => {
@@ -486,6 +491,18 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
           instructions={instructions}
           onExit={() => setKitchenRecipeId(null)}
         />
+      )}
+
+      {user?.impersonating && (
+        <div className="fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-between gap-3 px-4 py-2 bg-amber-500 text-stone-900 text-[13px] font-medium shadow-lg">
+          <span className="truncate">Viewing as <strong>{userEmail}</strong> — support impersonation session.</span>
+          <button
+            onClick={exitImpersonation}
+            className="shrink-0 inline-flex items-center px-3 py-1 rounded-md bg-stone-900 text-white hover:bg-stone-800 text-[12px] font-semibold"
+          >
+            Exit impersonation
+          </button>
+        </div>
       )}
     </div>
   );

@@ -11,6 +11,7 @@ export interface AuthUser {
   id: string;
   email: string;
   display_name?: string;
+  impersonating?: boolean;
 }
 
 interface AuthState {

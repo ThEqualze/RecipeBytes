@@ -41,14 +41,26 @@ if ($path === '/auth/login' && $method === 'POST') {
     $body = read_json_body();
     $email = trim(strtolower($body['email'] ?? ''));
     $password = (string)($body['password'] ?? '');
-    $stmt = db()->prepare('SELECT id, email, password_hash FROM users WHERE email = ?');
+    $stmt = db()->prepare('SELECT id, email, password_hash, suspended_at FROM users WHERE email = ?');
     $stmt->execute([$email]);
     $user = $stmt->fetch();
     if (!$user || !password_verify($password, $user['password_hash'])) {
         json_error('Invalid email or password', 401);
     }
+    if ($user['suspended_at'] !== null) {
+        json_error('This account has been suspended.', 403);
+    }
     start_session_for($user['id']);
     json_ok(['id' => $user['id'], 'email' => $user['email']]);
+}
+
+if ($path === '/auth/exit-impersonation' && $method === 'POST') {
+    require_once __DIR__ . '/../lib/admin_auth.php';
+    $r = exit_impersonation();
+    if (!$r['ok']) json_error('Not impersonating.', 400);
+    admin_audit($r['admin_id'] ?? null, 'impersonate_end', 'user', $r['target_id'] ?? null,
+        ['restored' => $r['restored']]);
+    json_ok(['redirect' => '/admin', 'restored' => $r['restored']]);
 }
 
 if ($path === '/auth/logout' && $method === 'POST') {
@@ -57,5 +69,12 @@ if ($path === '/auth/logout' && $method === 'POST') {
 }
 
 if ($path === '/auth/session' && $method === 'GET') {
-    json_ok(current_user());
+    $u = current_user();
+    if ($u === null) json_ok(null);
+    json_ok([
+        'id'            => $u['id'],
+        'email'         => $u['email'],
+        'display_name'  => $u['display_name'] ?? '',
+        'impersonating' => ($u['impersonated_by'] ?? null) !== null,
+    ]);
 }
