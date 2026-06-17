@@ -144,3 +144,30 @@ check('admin restored after exit', api('GET', '/admin/overview')['status'] === 2
 // Both ends of impersonation are audited.
 $impAudit = (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log WHERE action IN ('impersonate_start','impersonate_end')")->fetchColumn();
 check('impersonation start+end audited', $impAudit >= 2);
+
+// ===== Phase 2c: Email + password reset =====
+// (exit_impersonation above restored the admin session cookie)
+
+// Admin "send password reset email" (log transport in dev) -> 200 + audited + token row.
+$sr = api('POST', '/admin/users/' . $bId . '/reset-password', []);
+check('admin send reset -> 200', $sr['status'] === 200);
+check('reset token created for target', (int)$apdo->query("SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = " . $apdo->quote($bId))->fetchColumn() >= 1);
+check('send reset is audited', (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'send_password_reset'")->fetchColumn() >= 1);
+
+// Public forgot-password: known + unknown both return 200 (no account enumeration).
+check('forgot known -> 200', api('POST', '/auth/forgot-password', ['email' => $btarget])['status'] === 200);
+$before = (int)$apdo->query("SELECT COUNT(*) FROM password_reset_tokens")->fetchColumn();
+check('forgot unknown -> 200', api('POST', '/auth/forgot-password', ['email' => 'noone_' . bin2hex(random_bytes(4)) . '@example.com'])['status'] === 200);
+check('forgot unknown creates no token', (int)$apdo->query("SELECT COUNT(*) FROM password_reset_tokens")->fetchColumn() === $before);
+
+// reset-password: known token works once; reuse blocked; new password is live.
+$rawToken = bin2hex(random_bytes(16));
+$apdo->prepare('INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at, created_at) VALUES (UUID(), ?, ?, ?, UTC_TIMESTAMP())')
+     ->execute([$bId, hash('sha256', $rawToken), gmdate('Y-m-d H:i:s', time() + 3600)]);
+check('reset bad token -> 400', api('POST', '/auth/reset-password', ['token' => 'nope', 'password' => 'whatever1'])['status'] === 400);
+check('reset short password -> 400', api('POST', '/auth/reset-password', ['token' => $rawToken, 'password' => '123'])['status'] === 400);
+check('reset valid -> 200', api('POST', '/auth/reset-password', ['token' => $rawToken, 'password' => 'newpass123'])['status'] === 200);
+check('reset token consumed', $apdo->query("SELECT used_at FROM password_reset_tokens WHERE token_hash = " . $apdo->quote(hash('sha256', $rawToken)))->fetchColumn() !== null);
+check('reset token reuse -> 400', api('POST', '/auth/reset-password', ['token' => $rawToken, 'password' => 'another123'])['status'] === 400);
+reset_cookies();
+check('login with new password -> 200', api('POST', '/auth/login', ['email' => $btarget, 'password' => 'newpass123'])['status'] === 200);

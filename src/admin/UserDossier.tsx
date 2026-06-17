@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
-import { ArrowLeft, Loader2, ShieldCheck, Ban, RotateCcw, Gift, LogIn } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldCheck, Ban, RotateCcw, Gift, LogIn, Mail } from 'lucide-react';
 
 interface Dossier {
   user: { id: string; email: string; display_name: string; is_admin: boolean; suspended: boolean; suspended_at: string | null; created_at: string };
@@ -37,6 +37,8 @@ export function UserDossier({ id, onBack }: { id: string; onBack: () => void }) 
     finally { setBusy(false); }
   };
 
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+
   const impersonate = async () => {
     setBusy(true); setErr(null);
     try {
@@ -44,6 +46,18 @@ export function UserDossier({ id, onBack }: { id: string; onBack: () => void }) 
       window.location.href = r.redirect || '/';
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'Could not start impersonation.');
+      setBusy(false);
+    }
+  };
+
+  const sendReset = async () => {
+    setBusy(true); setErr(null); setResetMsg(null);
+    try {
+      const r = await api.post<{ sent: boolean }>(`/admin/users/${id}/reset-password`, {});
+      setResetMsg(r.sent ? 'Password reset email sent.' : 'Reset link created, but the email could not be sent (check SMTP config).');
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : 'Could not send reset email.');
+    } finally {
       setBusy(false);
     }
   };
@@ -136,15 +150,25 @@ export function UserDossier({ id, onBack }: { id: string; onBack: () => void }) 
       {/* Support */}
       <div className="bg-white border border-stone-200 rounded-xl p-4 mb-6">
         <div className="text-[11px] uppercase tracking-wider font-semibold text-stone-500 mb-2">Support</div>
-        <button
-          disabled={busy || u.is_admin}
-          onClick={impersonate}
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent-700 bg-accent-50 hover:bg-accent-100 disabled:opacity-50 rounded-lg px-3 py-1.5"
-        >
-          <LogIn className="w-3.5 h-3.5" /> Log in as this user
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            disabled={busy || u.is_admin}
+            onClick={impersonate}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent-700 bg-accent-50 hover:bg-accent-100 disabled:opacity-50 rounded-lg px-3 py-1.5"
+          >
+            <LogIn className="w-3.5 h-3.5" /> Log in as this user
+          </button>
+          <button
+            disabled={busy}
+            onClick={sendReset}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 disabled:opacity-50 rounded-lg px-3 py-1.5"
+          >
+            <Mail className="w-3.5 h-3.5" /> Send password reset email
+          </button>
+        </div>
+        {resetMsg && <p className="text-[12px] text-emerald-700 mt-2">{resetMsg}</p>}
         <p className="text-[12px] text-stone-500 mt-2">
-          Opens the app as this user in a time-limited support session (no password needed); a banner lets you exit back to admin.
+          Impersonation opens the app as this user in a time-limited support session (no password needed); a banner lets you exit.
           {u.is_admin && ' Admins cannot be impersonated.'}
         </p>
       </div>

@@ -220,6 +220,15 @@ if (($seg[1] ?? '') === 'users' && isset($seg[2]) && $seg[2] !== '') {
         json_ok(['tier_id' => $tierId, 'status' => $status, 'current_period_end' => $periodEnd]);
     }
 
+    // POST /admin/users/{id}/reset-password — email the user a reset link.
+    if ($action === 'reset-password' && $method === 'POST') {
+        require_once __DIR__ . '/../lib/password_reset.php';
+        $token = create_password_reset($userId);
+        $sent = send_password_reset_email($target['email'], $token, $mailErr);
+        admin_audit($admin['id'], 'send_password_reset', 'user', $userId, ['sent' => $sent]);
+        json_ok(['sent' => $sent]);
+    }
+
     // POST /admin/users/{id}/impersonate — start a "Login As" session for support.
     if ($action === 'impersonate' && $method === 'POST') {
         if ($userId === $admin['id']) json_error('You cannot impersonate yourself.', 400);
