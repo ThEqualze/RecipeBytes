@@ -25,4 +25,17 @@ return [
     // not the web root.
     // 'upload_dir'      => __DIR__ . '/../uploads/covers',
     // 'upload_base_url' => '/uploads/covers',
+    // --- Email (password reset, admin notifications) ---------------------
+    // Public base URL used to build links in emails (no trailing slash).
+    // Leave empty to derive from the incoming request.
+    'app_base_url'   => '',
+    // Outbound mail. With smtp_host empty, mail is written to the PHP error log
+    // (a safe no-op for local/dev); set real SMTP creds in production.
+    'mail_from'      => 'no-reply@recipebytes.co.uk',
+    'mail_from_name' => 'RecipeBytes',
+    'smtp_host'      => '',
+    'smtp_port'      => 587,
+    'smtp_user'      => '',
+    'smtp_pass'      => '',
+    'smtp_secure'    => 'tls', // 'tls' (STARTTLS, 587) | 'ssl' (465) | '' (none)
 ];

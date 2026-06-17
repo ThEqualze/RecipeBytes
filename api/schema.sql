@@ -356,6 +356,20 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
   KEY admin_audit_log_created_idx (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- password_reset_tokens (only a sha256 hash of the token is stored) ------
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id         CHAR(36) NOT NULL,
+  user_id    CHAR(36) NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at    DATETIME NULL DEFAULT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY prt_token_hash_unique (token_hash),
+  KEY prt_user_idx (user_id),
+  CONSTRAINT prt_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- seed default tiers -----------------------------------------------------
 INSERT IGNORE INTO subscription_tiers
   (id, tier_name, monthly_cost, max_recipes, max_url_imports, max_image_scans,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { api } from '../lib/api';
 import rbLogo from '../assets/rb-logo-hat.webp';
 
 export function AuthPage() {
@@ -12,6 +13,8 @@ export function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +25,14 @@ export function AuthPage() {
         ? await signUp(email, password, displayName)
         : await signIn(email, password);
     if (err) setError(err);
+    setLoading(false);
+  };
+
+  const handleForgot = async () => {
+    setError(null);
+    setLoading(true);
+    try { await api.post('/auth/forgot-password', { email }); } catch { /* ignore */ }
+    setForgotSent(true);
     setLoading(false);
   };
 
@@ -65,6 +76,39 @@ export function AuthPage() {
               : 'Start organizing your recipes in seconds.'}
           </p>
 
+          {forgot ? (
+            <div className="space-y-4">
+              {forgotSent ? (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-800 text-[13px]">
+                  If an account exists for that email, we've sent a password reset link.
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-[12px] font-medium text-stone-700 mb-1 block">Email</label>
+                    <input
+                      type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
+                      className="w-full px-3.5 py-2.5 text-[14px] bg-white border border-stone-200 rounded-lg placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/5 focus:border-stone-300"
+                    />
+                  </div>
+                  <button
+                    type="button" onClick={handleForgot} disabled={loading}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-stone-900 hover:bg-stone-800 disabled:bg-stone-400 text-white text-[14px] font-medium rounded-lg transition-colors"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 animate-spin" />} Send reset link
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => { setForgot(false); setForgotSent(false); setError(null); }}
+                className="w-full text-center text-[13px] text-stone-600 hover:underline"
+              >
+                Back to sign in
+              </button>
+            </div>
+          ) : (
+          <>
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
               <div>
@@ -117,6 +161,18 @@ export function AuthPage() {
               </div>
             </div>
 
+            {mode === 'signin' && (
+              <div className="text-right -mt-1">
+                <button
+                  type="button"
+                  onClick={() => { setForgot(true); setError(null); }}
+                  className="text-[12px] text-stone-500 hover:text-stone-800 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
             {error && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-50 border border-rose-100 text-rose-800 text-[13px]">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -148,6 +204,8 @@ export function AuthPage() {
               </button>
             </span>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
