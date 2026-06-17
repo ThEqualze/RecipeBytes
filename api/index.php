@@ -35,6 +35,7 @@ $routes = [
     '/public'          => 'public.php',
     '/import'          => 'import.php',
     '/uploads'         => 'uploads.php',
+    '/usage'           => 'usage.php',
     '/admin'           => 'admin.php',
 ];
 
