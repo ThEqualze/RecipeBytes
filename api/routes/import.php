@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../lib/import_extract.php';
 require_once __DIR__ . '/../lib/uploads.php';
+require_once __DIR__ . '/../lib/subscriptions.php';
+require_once __DIR__ . '/../lib/usage_notify.php';
 
 const PHOTO_IMPORT_MAX_FILES = 6;
 
@@ -11,7 +13,7 @@ $user = require_auth();
 
 // Photo import: read recipe-card photo(s) with Gemini vision.
 if ($path === '/import/photo' && $method === 'POST') {
-    handle_photo_import();
+    handle_photo_import($user);
     exit;
 }
 
@@ -25,12 +27,21 @@ $url = is_string($body['url'] ?? null) ? trim($body['url']) : '';
 $err = validate_public_url($url);
 if ($err !== null) json_error($err, 400);
 
+// Metering: block before any work if the user is at/over their monthly URL limit.
+$us = usage_status($user['id'], 'url');
+if (!$us['allowed']) {
+    json_error("You've reached your monthly URL import limit ({$us['limit']}). Upgrade to Pro for unlimited imports.", 402);
+}
+
 $html = safe_fetch($url, $fetchErr);
 if ($html === null) json_error($fetchErr ?? 'Couldn\'t reach that page.', 502);
 
 // Free path: schema.org JSON-LD
 $form = extract_jsonld_recipe($html, $url);
-if ($form !== null) json_ok($form);
+if ($form !== null) {
+    meter_success($user, 'url', 'URL imports');
+    json_ok($form);
+}
 
 // Fallback: Gemini (only if a key is configured)
 $cfg = app_config();
@@ -38,10 +49,14 @@ $key = is_string($cfg['gemini_api_key'] ?? null) ? $cfg['gemini_api_key'] : '';
 if ($key === '') json_error('We couldn\'t find a recipe on that page.', 422);
 
 $model = is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '' ? $cfg['gemini_model'] : 'gemini-2.5-flash';
-$form = gemini_extract($html, $url, $key, $model, $gemErr);
+$tokens = 0;
+$form = gemini_extract($html, $url, $key, $model, $gemErr, $tokens);
 if ($form === null) {
+    log_ai_job($user['id'], 'url', 'failed', 0, 0.0, $model, $gemErr ?? 'no recipe found');
     json_error($gemErr ?? 'We couldn\'t find a recipe on that page.', $gemErr !== null ? 502 : 422);
 }
+log_ai_job($user['id'], 'url', 'success', $tokens, ai_cost($tokens), $model);
+meter_success($user, 'url', 'URL imports');
 json_ok($form);
 
 
@@ -114,11 +129,17 @@ function safe_fetch(string $url, ?string &$error = null): ?string {
 
 // ---- Photo import (multipart -> Gemini vision -> RecipeFormData) ----
 
-function handle_photo_import(): void {
+function handle_photo_import(array $user): void {
     $files = normalize_uploaded_files($_FILES['files'] ?? null);
     if (count($files) === 0) json_error('No photos were uploaded.', 400);
     if (count($files) > PHOTO_IMPORT_MAX_FILES) {
         json_error('Please upload up to ' . PHOTO_IMPORT_MAX_FILES . ' photos.', 400);
+    }
+
+    // Metering: block before reading/encoding files or calling the model.
+    $us = usage_status($user['id'], 'image');
+    if (!$us['allowed']) {
+        json_error("You've reached your monthly image scan limit ({$us['limit']}). Upgrade to Pro for unlimited imports.", 402);
     }
 
     $images = [];
@@ -144,23 +165,38 @@ function handle_photo_import(): void {
         ? $cfg['gemini_model'] : 'gemini-2.5-flash';
 
     $gemErr = null;
-    $recipe = gemini_extract_images($images, $key, $model, $gemErr);
+    $tokens = 0;
+    $recipe = gemini_extract_images($images, $key, $model, $gemErr, $tokens);
     if ($recipe === null) {
+        log_ai_job($user['id'], 'image', 'failed', 0, 0.0, $model, $gemErr ?? 'no recipe found');
         // $gemErr set => transport/HTTP problem (502). Null => model found no recipe (422).
         json_error($gemErr ?? "We couldn't find a recipe on that card.", $gemErr !== null ? 502 : 422);
     }
+    log_ai_job($user['id'], 'image', 'success', $tokens, ai_cost($tokens), $model);
 
     // The card photo is not used as the cover — a snapshot of a card makes a poor
     // cover image. cover_image_url is left empty; the user adds their own cover in
     // the editor (the editor's cover-upload button stays available).
     $form = map_gemini_recipe($recipe, '');
+    meter_success($user, 'image', 'image scans');
     json_ok($form);
+}
+
+// Record a successful import against the user's monthly usage and fire threshold
+// alert emails (80% warning, 100% limit reached) when crossed.
+function meter_success(array $user, string $jobType, string $label): void {
+    $r = record_usage($user['id'], $jobType);
+    if ($r['reached_limit']) {
+        send_limit_reached_email($user['email'], $label, (int)$r['limit']);
+    } elseif ($r['crossed_80']) {
+        send_usage_warning_email($user['email'], $label, (int)$r['used'], (int)$r['limit']);
+    }
 }
 
 // POST the image payload to Gemini and return the parsed recipe array, or null.
 // On a transport/HTTP error sets $error (caller -> 502). When the model simply
 // returns "not a recipe", returns null with $error left null (caller -> 422).
-function gemini_extract_images(array $images, string $key, string $model, ?string &$error = null): ?array {
+function gemini_extract_images(array $images, string $key, string $model, ?string &$error = null, int &$tokens = 0): ?array {
     $payload = json_encode(build_gemini_image_payload(array_map(
         fn($i) => ['mime' => $i['mime'], 'data_b64' => $i['data_b64']],
         $images
@@ -185,6 +221,7 @@ function gemini_extract_images(array $images, string $key, string $model, ?strin
     if ($resp === false || $code >= 400) { $error = 'AI extraction is unavailable right now.'; return null; }
 
     $data = json_decode($resp, true);
+    $tokens = (int)($data['usageMetadata']['totalTokenCount'] ?? 0);
     $textOut = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
     if (!is_string($textOut) || trim($textOut) === '') {
         $error = 'AI extraction is unavailable right now.';
@@ -193,7 +230,7 @@ function gemini_extract_images(array $images, string $key, string $model, ?strin
     return parse_gemini_recipe_json($textOut);
 }
 
-function gemini_extract(string $html, string $url, string $key, string $model, ?string &$error = null): ?array {
+function gemini_extract(string $html, string $url, string $key, string $model, ?string &$error = null, int &$tokens = 0): ?array {
     $text = preg_replace('#<script\b[^>]*>.*?</script>#is', ' ', $html);
     $text = preg_replace('#<style\b[^>]*>.*?</style>#is', ' ', $text);
     $text = preg_replace('#<[^>]+>#', ' ', $text);
@@ -232,6 +269,7 @@ function gemini_extract(string $html, string $url, string $key, string $model, ?
     if ($resp === false || $code >= 400) { $error = 'AI extraction is unavailable right now.'; return null; }
 
     $data = json_decode($resp, true);
+    $tokens = (int)($data['usageMetadata']['totalTokenCount'] ?? 0);
     $textOut = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
     if (!is_string($textOut) || trim($textOut) === '') { $error = 'AI extraction is unavailable right now.'; return null; }
     $recipe = json_decode($textOut, true);

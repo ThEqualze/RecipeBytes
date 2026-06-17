@@ -14,6 +14,9 @@ interface ImportModalProps {
 
 type Mode = 'link' | 'photo';
 
+interface UsageStatus { allowed: boolean; used: number; limit: number | null; remaining: number | null; pct: number | null; }
+interface UsageResp { url: UsageStatus; image: UsageStatus; }
+
 const MAX_FILES = 6;
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -23,7 +26,16 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<UsageResp | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load the user's monthly usage so we can show remaining quota / near-limit state.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    api.get<UsageResp>('/usage').then((u) => { if (alive) setUsage(u); }).catch(() => {});
+    return () => { alive = false; };
+  }, [open]);
 
   // One object URL per File, cached so thumbnails stay stable across renders
   // (no flash) and are revoked exactly once. The cache is cleared on remove,
@@ -126,6 +138,23 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
       mode === m ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
     }`;
 
+  const cur = mode === 'link' ? usage?.url : usage?.image;
+  const atLimit = cur ? !cur.allowed : false;
+  const nearLimit = cur ? (cur.pct !== null && cur.pct >= 80 && cur.allowed) : false;
+  const noun = mode === 'link' ? 'URL imports' : 'image scans';
+
+  const usageLine = cur && cur.limit !== null ? (
+    <div className={`mb-4 text-[12px] rounded-lg px-3 py-2 border ${
+      atLimit ? 'bg-rose-50 border-rose-100 text-rose-700'
+      : nearLimit ? 'bg-amber-50 border-amber-100 text-amber-800'
+      : 'bg-stone-50 border-stone-100 text-stone-500'
+    }`}>
+      {atLimit
+        ? <><strong>Monthly {noun} limit reached ({cur.used}/{cur.limit}).</strong> Upgrade to Pro for unlimited imports.</>
+        : <>{cur.used} of {cur.limit} {noun} used this month{nearLimit ? ' — you\'re nearing your limit.' : '.'}</>}
+    </div>
+  ) : null;
+
   return (
     <div
       className="fixed inset-0 bg-stone-900/30 backdrop-blur-sm flex items-center justify-center z-50 px-4 animate-fade-in"
@@ -157,6 +186,8 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
             <Camera className="w-3.5 h-3.5" /> From photo
           </button>
         </div>
+
+        {usageLine}
 
         {mode === 'link' ? (
           <>
@@ -204,7 +235,7 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
               <button
                 type="button"
                 onClick={submitLink}
-                disabled={!url || busy}
+                disabled={!url || busy || atLimit}
                 className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-[13px] font-medium rounded-lg transition-colors"
               >
                 {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -283,7 +314,7 @@ export function ImportModal({ open, onClose, onImported }: ImportModalProps) {
               <button
                 type="button"
                 onClick={submitPhotos}
-                disabled={files.length === 0 || busy}
+                disabled={files.length === 0 || busy || atLimit}
                 className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-[13px] font-medium rounded-lg transition-colors"
               >
                 {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}

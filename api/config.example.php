@@ -17,6 +17,8 @@ return [
     // free fallback because reading a photo needs the vision model.
     'gemini_api_key' => '',
     'gemini_model'   => 'gemini-2.5-flash',
+    // Optional: estimated AI cost per 1,000 tokens (for the admin AI cost monitor).
+    'ai_cost_per_1k_tokens' => 0.0,
     // --- Cover image uploads ---------------------------------------------
     // Where uploaded cover images are written, and the public URL they map to.
     // Leave commented to auto-derive: <web_root>/uploads/covers served at
