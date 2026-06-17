@@ -119,6 +119,75 @@ if (($seg[1] ?? '') === 'ai') {
     }
 }
 
+// ---- Public link manager + takedown ----
+if (($seg[1] ?? '') === 'shares') {
+    $pdo = db();
+    if (!isset($seg[2]) && $method === 'GET') {
+        $page = max(1, (int)($_GET['page'] ?? 1)); $per = 25; $off = ($page - 1) * $per;
+        $total = (int)$pdo->query('SELECT COUNT(*) FROM shared_recipes')->fetchColumn();
+        $rows = $pdo->query(
+            "SELECT s.id, s.token, s.is_active, s.flagged_count, s.created_at, r.title, u.email
+               FROM shared_recipes s
+               LEFT JOIN recipes r ON r.id = s.recipe_id
+               LEFT JOIN users u ON u.id = s.user_id
+              ORDER BY s.flagged_count DESC, s.created_at DESC LIMIT $per OFFSET $off"
+        )->fetchAll();
+        json_ok([
+            'shares' => array_map(fn($r) => [
+                'id' => $r['id'], 'token' => $r['token'], 'title' => $r['title'] ?? '(deleted recipe)',
+                'owner' => $r['email'] ?? '(deleted user)', 'is_active' => (int)$r['is_active'] === 1,
+                'flagged_count' => (int)$r['flagged_count'], 'created_at' => $r['created_at'],
+            ], $rows),
+            'total' => $total, 'page' => $page, 'per_page' => $per,
+        ]);
+    }
+    if (isset($seg[2]) && $seg[2] !== '' && $method === 'POST') {
+        $shareId = $seg[2]; $action = $seg[3] ?? '';
+        $exists = $pdo->prepare('SELECT id FROM shared_recipes WHERE id = ?'); $exists->execute([$shareId]);
+        if (!$exists->fetch()) json_error('Not found', 404);
+        if ($action === 'revoke') {
+            $pdo->prepare('UPDATE shared_recipes SET is_active = 0, revoked_at = UTC_TIMESTAMP() WHERE id = ?')->execute([$shareId]);
+            admin_audit($admin['id'], 'revoke_share', 'share', $shareId);
+            json_ok(['is_active' => false]);
+        }
+        if ($action === 'restore') {
+            $pdo->prepare('UPDATE shared_recipes SET is_active = 1, revoked_at = NULL WHERE id = ?')->execute([$shareId]);
+            admin_audit($admin['id'], 'restore_share', 'share', $shareId);
+            json_ok(['is_active' => true]);
+        }
+    }
+}
+
+// ---- Reported content queue ----
+if (($seg[1] ?? '') === 'reports') {
+    $pdo = db();
+    if (!isset($seg[2]) && $method === 'GET') {
+        $status = (isset($_GET['status']) && $_GET['status'] === 'resolved') ? 'resolved' : 'open';
+        $rows = $pdo->prepare(
+            "SELECT c.id, c.token, c.reason, c.status, c.created_at, c.shared_recipe_id,
+                    r.title, s.is_active, s.flagged_count
+               FROM content_reports c
+               LEFT JOIN shared_recipes s ON s.id = c.shared_recipe_id
+               LEFT JOIN recipes r ON r.id = s.recipe_id
+              WHERE c.status = ? ORDER BY c.created_at DESC LIMIT 100"
+        );
+        $rows->execute([$status]);
+        json_ok(['reports' => array_map(fn($r) => [
+            'id' => $r['id'], 'share_id' => $r['shared_recipe_id'], 'token' => $r['token'],
+            'title' => $r['title'] ?? '(deleted recipe)', 'reason' => $r['reason'], 'status' => $r['status'],
+            'created_at' => $r['created_at'], 'share_active' => $r['is_active'] === null ? null : ((int)$r['is_active'] === 1),
+            'flagged_count' => $r['flagged_count'] === null ? null : (int)$r['flagged_count'],
+        ], $rows->fetchAll())]);
+    }
+    if (isset($seg[2]) && $seg[2] !== '' && ($seg[3] ?? '') === 'resolve' && $method === 'POST') {
+        $rep = $pdo->prepare('SELECT id FROM content_reports WHERE id = ?'); $rep->execute([$seg[2]]);
+        if (!$rep->fetch()) json_error('Not found', 404);
+        $pdo->prepare("UPDATE content_reports SET status = 'resolved', resolved_at = UTC_TIMESTAMP() WHERE id = ?")->execute([$seg[2]]);
+        admin_audit($admin['id'], 'resolve_report', 'report', $seg[2]);
+        json_ok(['status' => 'resolved']);
+    }
+}
+
 // ---- Tiers (Dynamic Tier & Paywall Manager) ----
 if (($seg[1] ?? '') === 'tiers') {
     // GET /admin/tiers — full tier definitions

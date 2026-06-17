@@ -7,10 +7,11 @@ import { UsersPage } from './UsersPage';
 import { UserDossier } from './UserDossier';
 import { TiersPage } from './TiersPage';
 import { AiMonitorPage } from './AiMonitorPage';
+import { ModerationPage } from './ModerationPage';
 import rbLogo from '../assets/rb-logo-hat.webp';
-import { LayoutDashboard, Users as UsersIcon, CreditCard, Cpu, LogOut, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Users as UsersIcon, CreditCard, Cpu, ShieldAlert, LogOut, Loader2 } from 'lucide-react';
 
-type Nav = { kind: 'overview' } | { kind: 'users' } | { kind: 'user'; id: string } | { kind: 'tiers' } | { kind: 'ai' };
+type Nav = { kind: 'overview' } | { kind: 'users' } | { kind: 'user'; id: string } | { kind: 'tiers' } | { kind: 'ai' } | { kind: 'moderation' };
 
 function CenterSpinner() {
   return (
@@ -80,6 +81,9 @@ export function AdminApp() {
           <button className={navItem(nav.kind === 'ai')} onClick={() => setNav({ kind: 'ai' })}>
             <Cpu className="w-4 h-4" /> AI monitor
           </button>
+          <button className={navItem(nav.kind === 'moderation')} onClick={() => setNav({ kind: 'moderation' })}>
+            <ShieldAlert className="w-4 h-4" /> Moderation
+          </button>
         </nav>
         <div className="p-3 border-t border-stone-100">
           <div className="text-[12px] text-stone-500 px-3 mb-1 truncate">{user.email}</div>
@@ -98,6 +102,7 @@ export function AdminApp() {
         {nav.kind === 'user' && <UserDossier id={nav.id} onBack={() => setNav({ kind: 'users' })} />}
         {nav.kind === 'tiers' && <TiersPage />}
         {nav.kind === 'ai' && <AiMonitorPage />}
+        {nav.kind === 'moderation' && <ModerationPage />}
       </main>
     </div>
   );
