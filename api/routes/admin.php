@@ -40,6 +40,82 @@ if ($path === '/admin/overview' && $method === 'GET') {
     ]);
 }
 
+// ---- Tiers (Dynamic Tier & Paywall Manager) ----
+if (($seg[1] ?? '') === 'tiers') {
+    // GET /admin/tiers — full tier definitions
+    if (!isset($seg[2]) && $method === 'GET') {
+        json_ok(['tiers' => array_map('serialize_tier', db()->query(
+            'SELECT * FROM subscription_tiers ORDER BY position, tier_name'
+        )->fetchAll())]);
+    }
+
+    // POST /admin/tiers — create
+    if (!isset($seg[2]) && $method === 'POST') {
+        $in = read_tier_input(read_json_body());
+        if ($in['error'] !== null) json_error($in['error'], 400);
+        $f = $in['fields'];
+        if (tier_name_taken($f['tier_name'], null)) json_error('A tier with that name already exists.', 409);
+        $id = uuid4();
+        db()->prepare(
+            'INSERT INTO subscription_tiers
+               (id, tier_name, monthly_cost, max_recipes, max_url_imports, max_image_scans,
+                multi_device_enabled, kitchen_mode_enabled, planner_enabled, shopping_list_enabled,
+                pantry_match_enabled, is_default, position, created_at, updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,UTC_TIMESTAMP(),UTC_TIMESTAMP())'
+        )->execute([
+            $id, $f['tier_name'], $f['monthly_cost'], $f['max_recipes'], $f['max_url_imports'], $f['max_image_scans'],
+            $f['multi_device_enabled'], $f['kitchen_mode_enabled'], $f['planner_enabled'], $f['shopping_list_enabled'],
+            $f['pantry_match_enabled'], $f['is_default'], $f['position'],
+        ]);
+        if ($f['is_default']) enforce_single_default($id);
+        admin_audit($admin['id'], 'create_tier', 'tier', $id, ['name' => $f['tier_name']]);
+        json_ok(['id' => $id]);
+    }
+
+    // /admin/tiers/{id}
+    if (isset($seg[2]) && $seg[2] !== '') {
+        $tierId = $seg[2];
+        $action = $seg[3] ?? '';
+        $tier = db()->prepare('SELECT * FROM subscription_tiers WHERE id = ?');
+        $tier->execute([$tierId]);
+        $existing = $tier->fetch();
+        if (!$existing) json_error('Not found', 404);
+
+        // POST /admin/tiers/{id} — update
+        if ($action === '' && $method === 'POST') {
+            $in = read_tier_input(read_json_body());
+            if ($in['error'] !== null) json_error($in['error'], 400);
+            $f = $in['fields'];
+            if (tier_name_taken($f['tier_name'], $tierId)) json_error('A tier with that name already exists.', 409);
+            db()->prepare(
+                'UPDATE subscription_tiers SET
+                   tier_name = ?, monthly_cost = ?, max_recipes = ?, max_url_imports = ?, max_image_scans = ?,
+                   multi_device_enabled = ?, kitchen_mode_enabled = ?, planner_enabled = ?, shopping_list_enabled = ?,
+                   pantry_match_enabled = ?, is_default = ?, position = ?, updated_at = UTC_TIMESTAMP()
+                 WHERE id = ?'
+            )->execute([
+                $f['tier_name'], $f['monthly_cost'], $f['max_recipes'], $f['max_url_imports'], $f['max_image_scans'],
+                $f['multi_device_enabled'], $f['kitchen_mode_enabled'], $f['planner_enabled'], $f['shopping_list_enabled'],
+                $f['pantry_match_enabled'], $f['is_default'], $f['position'], $tierId,
+            ]);
+            if ($f['is_default']) enforce_single_default($tierId);
+            admin_audit($admin['id'], 'update_tier', 'tier', $tierId, ['name' => $f['tier_name']]);
+            json_ok(['id' => $tierId]);
+        }
+
+        // POST /admin/tiers/{id}/delete
+        if ($action === 'delete' && $method === 'POST') {
+            if ((int)$existing['is_default'] === 1) json_error('Cannot delete the default tier. Make another tier the default first.', 400);
+            $inUse = db()->prepare('SELECT COUNT(*) FROM user_subscriptions WHERE tier_id = ?');
+            $inUse->execute([$tierId]);
+            if ((int)$inUse->fetchColumn() > 0) json_error('This tier has users assigned. Move them to another tier first.', 400);
+            db()->prepare('DELETE FROM subscription_tiers WHERE id = ?')->execute([$tierId]);
+            admin_audit($admin['id'], 'delete_tier', 'tier', $tierId, ['name' => $existing['tier_name']]);
+            json_ok(['deleted' => true]);
+        }
+    }
+}
+
 // ---- GET /admin/users  (directory: ?q=&suspended=0|1&page=) ----
 if ($path === '/admin/users' && $method === 'GET') {
     $pdo = db();
@@ -267,4 +343,80 @@ function admin_user_or_404(string $userId): array {
     $row = $stmt->fetch();
     if (!$row) json_error('Not found', 404);
     return $row;
+}
+
+// Cast a raw subscription_tiers row to typed JSON (limits null|int, features bool).
+function serialize_tier(array $t): array {
+    $ni = fn($v) => $v === null ? null : (int)$v;
+    return [
+        'id'                    => $t['id'],
+        'tier_name'             => $t['tier_name'],
+        'monthly_cost'          => (float)$t['monthly_cost'],
+        'max_recipes'           => $ni($t['max_recipes']),
+        'max_url_imports'       => $ni($t['max_url_imports']),
+        'max_image_scans'       => $ni($t['max_image_scans']),
+        'multi_device_enabled'  => (int)$t['multi_device_enabled'] === 1,
+        'kitchen_mode_enabled'  => (int)$t['kitchen_mode_enabled'] === 1,
+        'planner_enabled'       => (int)$t['planner_enabled'] === 1,
+        'shopping_list_enabled' => (int)$t['shopping_list_enabled'] === 1,
+        'pantry_match_enabled'  => (int)$t['pantry_match_enabled'] === 1,
+        'is_default'            => (int)$t['is_default'] === 1,
+        'position'              => (int)$t['position'],
+    ];
+}
+
+// Validate + normalize a tier create/update payload. max_* blank/null = unlimited.
+// Returns ['fields'=>array|null, 'error'=>string|null].
+function read_tier_input(array $b): array {
+    $name = is_string($b['tier_name'] ?? null) ? trim($b['tier_name']) : '';
+    if ($name === '' || mb_strlen($name) > 64) {
+        return ['fields' => null, 'error' => 'Tier name is required (max 64 characters).'];
+    }
+    $cost = $b['monthly_cost'] ?? 0;
+    if (!is_numeric($cost) || (float)$cost < 0) {
+        return ['fields' => null, 'error' => 'Monthly cost must be a non-negative number.'];
+    }
+    $err = false;
+    $nint = function ($v) use (&$err) {
+        if ($v === null || $v === '') return null;            // unlimited
+        if (!is_numeric($v) || (int)$v < 0) { $err = true; return null; }
+        return (int)$v;
+    };
+    $maxRecipes = $nint($b['max_recipes'] ?? null);
+    $maxUrl     = $nint($b['max_url_imports'] ?? null);
+    $maxImg     = $nint($b['max_image_scans'] ?? null);
+    if ($err) {
+        return ['fields' => null, 'error' => 'Limits must be blank (unlimited) or a non-negative whole number.'];
+    }
+    $bool = fn($k) => !empty($b[$k]) ? 1 : 0;
+    return ['error' => null, 'fields' => [
+        'tier_name'             => $name,
+        'monthly_cost'          => (float)$cost,
+        'max_recipes'           => $maxRecipes,
+        'max_url_imports'       => $maxUrl,
+        'max_image_scans'       => $maxImg,
+        'multi_device_enabled'  => $bool('multi_device_enabled'),
+        'kitchen_mode_enabled'  => $bool('kitchen_mode_enabled'),
+        'planner_enabled'       => $bool('planner_enabled'),
+        'shopping_list_enabled' => $bool('shopping_list_enabled'),
+        'pantry_match_enabled'  => $bool('pantry_match_enabled'),
+        'is_default'            => $bool('is_default'),
+        'position'              => isset($b['position']) && is_numeric($b['position']) ? (int)$b['position'] : 0,
+    ]];
+}
+
+function tier_name_taken(string $name, ?string $excludeId): bool {
+    if ($excludeId === null) {
+        $s = db()->prepare('SELECT COUNT(*) FROM subscription_tiers WHERE tier_name = ?');
+        $s->execute([$name]);
+    } else {
+        $s = db()->prepare('SELECT COUNT(*) FROM subscription_tiers WHERE tier_name = ? AND id != ?');
+        $s->execute([$name, $excludeId]);
+    }
+    return (int)$s->fetchColumn() > 0;
+}
+
+// Ensure exactly one default tier: clear the flag on all others.
+function enforce_single_default(string $keepId): void {
+    db()->prepare('UPDATE subscription_tiers SET is_default = 0 WHERE id != ?')->execute([$keepId]);
 }
