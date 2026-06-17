@@ -6,10 +6,11 @@ import { OverviewPage } from './OverviewPage';
 import { UsersPage } from './UsersPage';
 import { UserDossier } from './UserDossier';
 import { TiersPage } from './TiersPage';
+import { AiMonitorPage } from './AiMonitorPage';
 import rbLogo from '../assets/rb-logo-hat.webp';
-import { LayoutDashboard, Users as UsersIcon, CreditCard, LogOut, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Users as UsersIcon, CreditCard, Cpu, LogOut, Loader2 } from 'lucide-react';
 
-type Nav = { kind: 'overview' } | { kind: 'users' } | { kind: 'user'; id: string } | { kind: 'tiers' };
+type Nav = { kind: 'overview' } | { kind: 'users' } | { kind: 'user'; id: string } | { kind: 'tiers' } | { kind: 'ai' };
 
 function CenterSpinner() {
   return (
@@ -76,6 +77,9 @@ export function AdminApp() {
           <button className={navItem(nav.kind === 'tiers')} onClick={() => setNav({ kind: 'tiers' })}>
             <CreditCard className="w-4 h-4" /> Tiers
           </button>
+          <button className={navItem(nav.kind === 'ai')} onClick={() => setNav({ kind: 'ai' })}>
+            <Cpu className="w-4 h-4" /> AI monitor
+          </button>
         </nav>
         <div className="p-3 border-t border-stone-100">
           <div className="text-[12px] text-stone-500 px-3 mb-1 truncate">{user.email}</div>
@@ -93,6 +97,7 @@ export function AdminApp() {
         {nav.kind === 'users' && <UsersPage onOpenUser={(id) => setNav({ kind: 'user', id })} />}
         {nav.kind === 'user' && <UserDossier id={nav.id} onBack={() => setNav({ kind: 'users' })} />}
         {nav.kind === 'tiers' && <TiersPage />}
+        {nav.kind === 'ai' && <AiMonitorPage />}
       </main>
     </div>
   );

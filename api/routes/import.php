@@ -4,6 +4,7 @@ require_once __DIR__ . '/../lib/import_extract.php';
 require_once __DIR__ . '/../lib/uploads.php';
 require_once __DIR__ . '/../lib/subscriptions.php';
 require_once __DIR__ . '/../lib/usage_notify.php';
+require_once __DIR__ . '/../lib/settings.php';
 
 const PHOTO_IMPORT_MAX_FILES = 6;
 
@@ -48,7 +49,7 @@ $cfg = app_config();
 $key = is_string($cfg['gemini_api_key'] ?? null) ? $cfg['gemini_api_key'] : '';
 if ($key === '') json_error('We couldn\'t find a recipe on that page.', 422);
 
-$model = is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '' ? $cfg['gemini_model'] : 'gemini-2.5-flash';
+$model = active_ai_model($cfg);
 $tokens = 0;
 $form = gemini_extract($html, $url, $key, $model, $gemErr, $tokens);
 if ($form === null) {
@@ -161,8 +162,7 @@ function handle_photo_import(array $user): void {
     $key = is_string($cfg['gemini_api_key'] ?? null) ? $cfg['gemini_api_key'] : '';
     if ($key === '') json_error("Photo import needs AI extraction, which isn't set up.", 422);
 
-    $model = (is_string($cfg['gemini_model'] ?? null) && $cfg['gemini_model'] !== '')
-        ? $cfg['gemini_model'] : 'gemini-2.5-flash';
+    $model = active_ai_model($cfg);
 
     $gemErr = null;
     $tokens = 0;

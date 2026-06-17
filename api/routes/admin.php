@@ -5,6 +5,9 @@
 
 require_once __DIR__ . '/../lib/admin_auth.php';
 require_once __DIR__ . '/../lib/subscriptions.php';
+require_once __DIR__ . '/../lib/settings.php';
+
+const AI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-flash-latest', 'gemini-2.0-flash-lite', 'gemini-3-flash-preview'];
 
 $path   = $GLOBALS['ROUTE_PATH'];
 $method = $GLOBALS['ROUTE_METHOD'];
@@ -38,6 +41,82 @@ if ($path === '/admin/overview' && $method === 'GET') {
         'counts' => ['users' => $userCount, 'admins' => $adminCount, 'suspended' => $suspended, 'active_recipes' => $recipeCount],
         'tiers'  => $tiers,
     ]);
+}
+
+// ---- AI cost & performance monitor + model switcher ----
+if (($seg[1] ?? '') === 'ai') {
+    $sub = $seg[2] ?? '';
+    $pdo = db();
+
+    if ($sub === 'stats' && $method === 'GET') {
+        $days = max(1, min(365, (int)($_GET['days'] ?? 30)));
+        $totals = $pdo->query(
+            "SELECT COUNT(*) jobs,
+                    SUM(status='success') ok,
+                    SUM(status='failed') failed,
+                    COALESCE(SUM(tokens_used),0) tokens,
+                    COALESCE(SUM(cost),0) cost
+               FROM ai_job_logs"
+        )->fetch();
+        $byType = $pdo->query(
+            "SELECT job_type, COUNT(*) jobs, COALESCE(SUM(tokens_used),0) tokens, COALESCE(SUM(cost),0) cost
+               FROM ai_job_logs GROUP BY job_type"
+        )->fetchAll();
+        $dailyStmt = $pdo->prepare(
+            "SELECT DATE(created_at) d, COUNT(*) jobs, COALESCE(SUM(tokens_used),0) tokens, COALESCE(SUM(cost),0) cost
+               FROM ai_job_logs WHERE created_at >= (UTC_TIMESTAMP() - INTERVAL ? DAY)
+              GROUP BY DATE(created_at) ORDER BY d"
+        );
+        $dailyStmt->execute([$days]);
+        $leaders = $pdo->query(
+            "SELECT a.user_id, u.email, COUNT(*) jobs, COALESCE(SUM(a.tokens_used),0) tokens, COALESCE(SUM(a.cost),0) cost
+               FROM ai_job_logs a LEFT JOIN users u ON u.id = a.user_id
+              GROUP BY a.user_id, u.email ORDER BY tokens DESC LIMIT 10"
+        )->fetchAll();
+
+        json_ok([
+            'totals' => [
+                'jobs' => (int)$totals['jobs'], 'success' => (int)$totals['ok'], 'failed' => (int)$totals['failed'],
+                'tokens' => (int)$totals['tokens'], 'cost' => (float)$totals['cost'],
+            ],
+            'by_type' => array_map(fn($r) => ['job_type' => $r['job_type'], 'jobs' => (int)$r['jobs'], 'tokens' => (int)$r['tokens'], 'cost' => (float)$r['cost']], $byType),
+            'daily' => array_map(fn($r) => ['date' => $r['d'], 'jobs' => (int)$r['jobs'], 'tokens' => (int)$r['tokens'], 'cost' => (float)$r['cost']], $dailyStmt->fetchAll()),
+            'leaderboard' => array_map(fn($r) => ['user_id' => $r['user_id'], 'email' => $r['email'] ?? '(deleted user)', 'jobs' => (int)$r['jobs'], 'tokens' => (int)$r['tokens'], 'cost' => (float)$r['cost']], $leaders),
+        ]);
+    }
+
+    if ($sub === 'failures' && $method === 'GET') {
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $per = 25; $off = ($page - 1) * $per;
+        $total = (int)$pdo->query("SELECT COUNT(*) FROM ai_job_logs WHERE status = 'failed'")->fetchColumn();
+        $rows = $pdo->query(
+            "SELECT a.id, a.user_id, u.email, a.job_type, a.model, a.error_message, a.created_at
+               FROM ai_job_logs a LEFT JOIN users u ON u.id = a.user_id
+              WHERE a.status = 'failed' ORDER BY a.created_at DESC LIMIT $per OFFSET $off"
+        )->fetchAll();
+        json_ok([
+            'failures' => array_map(fn($r) => [
+                'id' => $r['id'], 'email' => $r['email'] ?? '(deleted user)', 'job_type' => $r['job_type'],
+                'model' => $r['model'], 'error_message' => $r['error_message'], 'created_at' => $r['created_at'],
+            ], $rows),
+            'total' => $total, 'page' => $page, 'per_page' => $per,
+        ]);
+    }
+
+    if ($sub === 'model' && $method === 'GET') {
+        json_ok(['model' => active_ai_model(app_config()), 'available' => AI_MODELS]);
+    }
+
+    if ($sub === 'model' && $method === 'POST') {
+        $body = read_json_body();
+        $model = is_string($body['model'] ?? null) ? trim($body['model']) : '';
+        if ($model === '' || mb_strlen($model) > 64 || !preg_match('/^[A-Za-z0-9.\-]+$/', $model)) {
+            json_error('Invalid model identifier.', 400);
+        }
+        set_setting('gemini_model', $model);
+        admin_audit($admin['id'], 'set_ai_model', 'setting', 'gemini_model', ['model' => $model]);
+        json_ok(['model' => $model]);
+    }
 }
 
 // ---- Tiers (Dynamic Tier & Paywall Manager) ----
