@@ -356,6 +356,14 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
   KEY admin_audit_log_created_idx (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- system_settings (global key/value, e.g. the active AI model) -----------
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key   VARCHAR(64) NOT NULL,
+  setting_value TEXT        NULL,
+  updated_at    DATETIME    NOT NULL,
+  PRIMARY KEY (setting_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- password_reset_tokens (only a sha256 hash of the token is stored) ------
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id         CHAR(36) NOT NULL,

@@ -13,7 +13,7 @@ foreach (['sessions','users','profiles','folders','tags','recipes','ingredients'
           'instructions','recipe_tags','extraction_jobs','grocery_lists',
           'grocery_list_items','shared_recipes','meal_plans','collections',
           'collection_recipes','user_subscriptions','usage_ledger',
-          'ai_job_logs','admin_audit_log','password_reset_tokens'] as $t) {
+          'ai_job_logs','admin_audit_log','password_reset_tokens','system_settings'] as $t) {
     $pdo->exec("TRUNCATE TABLE `$t`");
 }
 $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
