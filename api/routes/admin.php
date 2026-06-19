@@ -6,6 +6,7 @@
 require_once __DIR__ . '/../lib/admin_auth.php';
 require_once __DIR__ . '/../lib/subscriptions.php';
 require_once __DIR__ . '/../lib/settings.php';
+require_once __DIR__ . '/../lib/announcements.php';
 
 const AI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-flash-latest', 'gemini-2.0-flash-lite', 'gemini-3-flash-preview'];
 
@@ -474,6 +475,99 @@ if (($seg[1] ?? '') === 'users' && isset($seg[2]) && $seg[2] !== '') {
         admin_audit($admin['id'], 'reset_usage', 'user', $userId);
         json_ok(['url_imports_count' => 0, 'image_scans_count' => 0]);
     }
+}
+
+// ---- Announcement bar (Phase 7) ----
+if (($seg[1] ?? '') === 'announcements') {
+    $pdo = db();
+
+    // GET /admin/announcements — full list with computed status + hidden_by_newer.
+    if (!isset($seg[2]) && $method === 'GET') {
+        $now  = gmdate('Y-m-d H:i:s');
+        $rows = $pdo->query(
+            'SELECT id, message, type, link_label, link_url, is_active, starts_at, ends_at, created_at, updated_at
+               FROM announcements ORDER BY created_at DESC'
+        )->fetchAll();
+        // Newest currently-live id (if any) is the visible one; other live rows are shadowed.
+        $visibleLiveId = null;
+        foreach ($rows as $r) {
+            if (announcement_status($r, $now) === 'live') { $visibleLiveId = $r['id']; break; }
+        }
+        $out = [];
+        foreach ($rows as $r) {
+            $status = announcement_status($r, $now);
+            $out[] = [
+                'id'              => $r['id'],
+                'message'         => $r['message'],
+                'type'            => $r['type'],
+                'link_label'      => $r['link_label'],
+                'link_url'        => $r['link_url'],
+                'is_active'       => (int)$r['is_active'] === 1,
+                'starts_at'       => $r['starts_at'],
+                'ends_at'         => $r['ends_at'],
+                'created_at'      => $r['created_at'],
+                'status'          => $status,
+                'hidden_by_newer' => $status === 'live' && $r['id'] !== $visibleLiveId,
+            ];
+        }
+        json_ok(['announcements' => $out]);
+    }
+
+    // POST /admin/announcements — create.
+    if (!isset($seg[2]) && $method === 'POST') {
+        $body = read_json_body();
+        // Default new announcements to active unless explicitly set to 0/false.
+        if (!array_key_exists('is_active', $body)) $body['is_active'] = 1;
+        $v = validate_announcement($body);
+        if ($v['errors']) json_error(implode(' ', $v['errors']), 422);
+        $f  = $v['fields'];
+        $id = uuid4();
+        $pdo->prepare(
+            'INSERT INTO announcements
+               (id, message, type, link_label, link_url, is_active, starts_at, ends_at, created_by, created_at, updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))'
+        )->execute([
+            $id, $f['message'], $f['type'], $f['link_label'], $f['link_url'],
+            $f['is_active'], $f['starts_at'], $f['ends_at'], $admin['id'],
+        ]);
+        admin_audit($admin['id'], 'create_announcement', 'announcement', $id, ['type' => $f['type']]);
+        json_ok(['id' => $id]);
+    }
+
+    // PATCH /admin/announcements/{id} — full update.
+    if (isset($seg[2]) && $method === 'PATCH') {
+        $id     = $seg[2];
+        $exists = $pdo->prepare('SELECT id FROM announcements WHERE id = ?');
+        $exists->execute([$id]);
+        if (!$exists->fetchColumn()) json_error('Not found', 404);
+
+        $v = validate_announcement(read_json_body());
+        if ($v['errors']) json_error(implode(' ', $v['errors']), 422);
+        $f = $v['fields'];
+        $pdo->prepare(
+            'UPDATE announcements
+                SET message = ?, type = ?, link_label = ?, link_url = ?,
+                    is_active = ?, starts_at = ?, ends_at = ?, updated_at = UTC_TIMESTAMP(6)
+              WHERE id = ?'
+        )->execute([
+            $f['message'], $f['type'], $f['link_label'], $f['link_url'],
+            $f['is_active'], $f['starts_at'], $f['ends_at'], $id,
+        ]);
+        admin_audit($admin['id'], 'update_announcement', 'announcement', $id, ['is_active' => $f['is_active']]);
+        json_ok(['id' => $id]);
+    }
+
+    // DELETE /admin/announcements/{id}.
+    if (isset($seg[2]) && $method === 'DELETE') {
+        $id   = $seg[2];
+        $stmt = $pdo->prepare('DELETE FROM announcements WHERE id = ?');
+        $stmt->execute([$id]);
+        if ($stmt->rowCount() === 0) json_error('Not found', 404); // mirror PATCH on missing rows
+        admin_audit($admin['id'], 'delete_announcement', 'announcement', $id);
+        json_ok(['deleted' => true]);
+    }
+
+    json_error('Not found', 404);
 }
 
 json_error('Not found', 404);

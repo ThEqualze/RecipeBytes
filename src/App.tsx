@@ -30,6 +30,7 @@ import {
 } from './hooks/useData';
 import { api } from './lib/api';
 import { Loader2, Menu } from 'lucide-react';
+import { AnnouncementBar } from './components/AnnouncementBar';
 import rbLogo from './assets/rb-logo-hat.webp';
 
 function descendantFolderIds(
@@ -259,7 +260,9 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-stone-50 text-stone-900">
+    <div className="flex flex-col h-screen w-screen overflow-hidden">
+      <AnnouncementBar />
+      <div className="flex flex-1 min-h-0 w-screen overflow-hidden bg-stone-50 text-stone-900">
       {/* Mobile header */}
       <div className="fixed top-0 left-0 right-0 z-40 md:hidden bg-white/95 backdrop-blur border-b border-stone-200 flex items-center justify-between px-4 py-3">
         <button
@@ -504,6 +507,7 @@ function Workspace({ userId, userEmail, shareToken, clearShareToken }: { userId:
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }

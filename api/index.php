@@ -37,6 +37,7 @@ $routes = [
     '/uploads'         => 'uploads.php',
     '/usage'           => 'usage.php',
     '/admin'           => 'admin.php',
+    '/announcements'   => 'announcements.php',
 ];
 
 function path_matches(string $path, string $prefix): bool {
