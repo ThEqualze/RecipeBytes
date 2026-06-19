@@ -393,6 +393,23 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   CONSTRAINT prt_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- announcements (global announcement bar, Phase 7) -----------------------
+CREATE TABLE IF NOT EXISTS announcements (
+  id          CHAR(36)     NOT NULL,
+  message     VARCHAR(280) NOT NULL,
+  type        ENUM('info','warning','critical') NOT NULL DEFAULT 'info',
+  link_label  VARCHAR(60)  NULL,
+  link_url    VARCHAR(500) NULL,
+  is_active   TINYINT(1)   NOT NULL DEFAULT 1,
+  starts_at   DATETIME     NULL,
+  ends_at     DATETIME     NULL,
+  created_by  CHAR(36)     NULL,
+  created_at  DATETIME     NOT NULL,
+  updated_at  DATETIME     NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_active_window (is_active, starts_at, ends_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- seed default tiers -----------------------------------------------------
 INSERT IGNORE INTO subscription_tiers
   (id, tier_name, monthly_cost, max_recipes, max_url_imports, max_image_scans,
