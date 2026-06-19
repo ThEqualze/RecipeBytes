@@ -547,7 +547,7 @@ if (($seg[1] ?? '') === 'announcements') {
         $pdo->prepare(
             'UPDATE announcements
                 SET message = ?, type = ?, link_label = ?, link_url = ?,
-                    is_active = ?, starts_at = ?, ends_at = ?, updated_at = UTC_TIMESTAMP()
+                    is_active = ?, starts_at = ?, ends_at = ?, updated_at = UTC_TIMESTAMP(6)
               WHERE id = ?'
         )->execute([
             $f['message'], $f['type'], $f['link_label'], $f['link_url'],
@@ -559,8 +559,10 @@ if (($seg[1] ?? '') === 'announcements') {
 
     // DELETE /admin/announcements/{id}.
     if (isset($seg[2]) && $method === 'DELETE') {
-        $id = $seg[2];
-        $pdo->prepare('DELETE FROM announcements WHERE id = ?')->execute([$id]);
+        $id   = $seg[2];
+        $stmt = $pdo->prepare('DELETE FROM announcements WHERE id = ?');
+        $stmt->execute([$id]);
+        if ($stmt->rowCount() === 0) json_error('Not found', 404); // mirror PATCH on missing rows
         admin_audit($admin['id'], 'delete_announcement', 'announcement', $id);
         json_ok(['deleted' => true]);
     }

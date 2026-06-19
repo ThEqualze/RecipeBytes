@@ -14,7 +14,7 @@ function ann_insert(PDO $pdo, array $f): string {
     $pdo->prepare(
         'INSERT INTO announcements
            (id, message, type, link_label, link_url, is_active, starts_at, ends_at, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?, UTC_TIMESTAMP(), UTC_TIMESTAMP())'
+         VALUES (?,?,?,?,?,?,?,?, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))'
     )->execute([
         $id, $f['message'], $f['type'] ?? 'info', $f['link_label'] ?? null, $f['link_url'] ?? null,
         $f['is_active'] ?? 1, $f['starts_at'] ?? null, $f['ends_at'] ?? null,
@@ -107,3 +107,5 @@ check('patch audited', (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log W
 check('delete -> 200', api('DELETE', "/admin/announcements/$annId2")['status'] === 200);
 check('row gone', (int)$apdo->query("SELECT COUNT(*) FROM announcements WHERE id = " . $apdo->quote($annId2))->fetchColumn() === 0);
 check('delete audited', (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'delete_announcement'")->fetchColumn() >= 1);
+// Deleting a row that no longer exists 404s (mirrors PATCH).
+check('delete missing -> 404', api('DELETE', "/admin/announcements/$annId2")['status'] === 404);
