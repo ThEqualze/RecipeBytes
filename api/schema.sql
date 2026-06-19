@@ -404,8 +404,8 @@ CREATE TABLE IF NOT EXISTS announcements (
   starts_at   DATETIME     NULL,
   ends_at     DATETIME     NULL,
   created_by  CHAR(36)     NULL,
-  created_at  DATETIME     NOT NULL,
-  updated_at  DATETIME     NOT NULL,
+  created_at  DATETIME(6)  NOT NULL,
+  updated_at  DATETIME(6)  NOT NULL,
   PRIMARY KEY (id),
   KEY idx_active_window (is_active, starts_at, ends_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
