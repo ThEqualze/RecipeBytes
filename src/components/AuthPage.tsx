@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AnnouncementBar } from './AnnouncementBar';
 import { Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -37,7 +38,9 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 flex">
+    <div className="flex flex-col min-h-screen">
+      <AnnouncementBar />
+      <div className="min-h-screen bg-stone-50 flex">
       <div className="hidden lg:flex lg:flex-1 relative overflow-hidden">
         <img
           src="https://images.pexels.com/photos/1556688/pexels-photo-1556688.jpeg?auto=compress&cs=tinysrgb&w=1600"
@@ -207,6 +210,7 @@ export function AuthPage() {
           </>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
