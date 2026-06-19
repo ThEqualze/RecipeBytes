@@ -46,3 +46,64 @@ ann_insert($apdo, ['message' => 'Older']);
 sleep(1);
 ann_insert($apdo, ['message' => 'Newer']);
 check('newest active wins', api('GET', '/announcements/active', null, false)['json']['data']['message'] === 'Newer');
+
+// --- Admin CRUD ---
+reset_cookies();
+$apdo->exec('DELETE FROM announcements');
+
+// Non-admin is 404 (non-disclosure), consistent with the rest of /admin.
+$nonAdmin = 'annuser_' . bin2hex(random_bytes(4)) . '@example.com';
+api('POST', '/auth/signup', ['email' => $nonAdmin, 'password' => 'secret123', 'display_name' => 'U']);
+check('non-admin list -> 404', api('GET', '/admin/announcements')['status'] === 404);
+
+// Promote a fresh admin.
+reset_cookies();
+$annAdmin = 'annadmin_' . bin2hex(random_bytes(4)) . '@example.com';
+api('POST', '/auth/signup', ['email' => $annAdmin, 'password' => 'secret123', 'display_name' => 'A']);
+$apdo->prepare('UPDATE users SET is_admin = 1 WHERE email = ?')->execute([$annAdmin]);
+
+// Create.
+$c = api('POST', '/admin/announcements', ['message' => 'Hello world', 'type' => 'info']);
+check('admin create -> 200', $c['status'] === 200);
+$annId = $c['json']['data']['id'];
+check('created row id returned', is_string($annId) && $annId !== '');
+check('create audited', (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'create_announcement'")->fetchColumn() >= 1);
+
+// Validation: empty message rejected.
+check('empty message -> 422', api('POST', '/admin/announcements', ['message' => '   '])['status'] === 422);
+// Validation: link needs both parts.
+check('half a link -> 422', api('POST', '/admin/announcements', ['message' => 'x', 'link_url' => 'https://a.com'])['status'] === 422);
+// Validation: ends before starts.
+check('ends before starts -> 422', api('POST', '/admin/announcements', [
+    'message' => 'x', 'starts_at' => '2026-07-02 10:00:00', 'ends_at' => '2026-07-01 10:00:00',
+])['status'] === 422);
+
+// List shows it as live.
+$list = api('GET', '/admin/announcements');
+check('list -> 200', $list['status'] === 200);
+$found = null;
+foreach ($list['json']['data']['announcements'] as $a) { if ($a['id'] === $annId) $found = $a; }
+check('created appears in list as live', $found !== null && $found['status'] === 'live');
+check('live row not hidden', $found['hidden_by_newer'] === false);
+
+// A newer live row shadows the older one.
+$c2 = api('POST', '/admin/announcements', ['message' => 'Newer one', 'type' => 'info']);
+$annId2 = $c2['json']['data']['id'];
+$list2 = api('GET', '/admin/announcements');
+$old = null; $new = null;
+foreach ($list2['json']['data']['announcements'] as $a) {
+    if ($a['id'] === $annId)  $old = $a;
+    if ($a['id'] === $annId2) $new = $a;
+}
+check('older live row flagged hidden_by_newer', $old['hidden_by_newer'] === true);
+check('newest live row not hidden', $new['hidden_by_newer'] === false);
+
+// Patch: toggle the old one off.
+check('patch off -> 200', api('PATCH', "/admin/announcements/$annId", ['message' => 'Hello world', 'is_active' => 0])['status'] === 200);
+check('patched row now off', $apdo->query("SELECT is_active FROM announcements WHERE id = " . $apdo->quote($annId))->fetchColumn() == 0);
+check('patch audited', (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'update_announcement'")->fetchColumn() >= 1);
+
+// Delete.
+check('delete -> 200', api('DELETE', "/admin/announcements/$annId2")['status'] === 200);
+check('row gone', (int)$apdo->query("SELECT COUNT(*) FROM announcements WHERE id = " . $apdo->quote($annId2))->fetchColumn() === 0);
+check('delete audited', (int)$apdo->query("SELECT COUNT(*) FROM admin_audit_log WHERE action = 'delete_announcement'")->fetchColumn() >= 1);
